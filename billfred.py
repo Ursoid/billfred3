@@ -13,7 +13,11 @@ import sleekxmpp
 import configparser
 
 import sqlite3
+import queue
+import threading
+
 import time
+
 
 
 # use UTF-8 encoding
@@ -25,18 +29,34 @@ else:
 
 #path + name
 db_full_path=""
+#Queue for messages  to write
+queue = queue.Queue()
 
+
+#Open sqlite thread  and write log  from queue
+def db_thread(queue):
+    connect_db = sqlite3.connect(db_full_path)
+    while True:
+        query = queue.get()
+        cursor_db = connect_db.cursor()
+        #logging.info("DEBUG: Query writing to file")
+        cursor_db.execute("""INSERT INTO chat_log (id, time, jit, name, message)
+                            VALUES (NULL,?,?,?,?)""", query)
+        connect_db.commit()
+        #TODO:  add  EOF command  to queue  for normal  close DB connection
+    connect_db.close()
 
 
 class BBot(sleekxmpp.ClientXMPP):
 
-    def __init__(self, jid, password, room, nick):
+    def __init__(self, jid, password, room, nick, queue):
 
         
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
         self.room = room
         self.nick = nick
+        self.queue = queue
 
         self.add_event_handler("session_start", self.start)
         self.add_event_handler("groupchat_message", self.muc_message)
@@ -59,6 +79,7 @@ class BBot(sleekxmpp.ClientXMPP):
         message = msg['body'] # Message body
         time_local = time.time()
         self.write_chat_log((time_local, jid, nick, message,))
+
         
         if msg['mucnick'] != self.nick and self.nick in msg['body']:
             self.send_message(mto=msg['from'].bare,
@@ -98,29 +119,18 @@ class BBot(sleekxmpp.ClientXMPP):
             logging.info("No response from %s", pingjid)
 
 
-
-
     def muc_online(self, presence):
         if presence['muc']['nick'] != self.nick:
             self.send_message(mto=presence['from'].bare,
                               mbody="Hello, %s %s" % (presence['muc']['role'],
                                                       presence['muc']['nick']),
                               mtype='groupchat')
-    
-    def write_chat_log(self,query):
-    #SQLite objects created in a thread can only be used in that same thread
-        connect_db = sqlite3.connect(db_full_path)
-        cursor_db = connect_db.cursor()
-        
-        query = (time.time(), "usr@jabber.ru", "user", "tis is the message",)
-        
-        logging.info("DEBUG: Query writing to file")
 
-        cursor_db.execute("""INSERT INTO chat_log (id, time, jit, name, message)
-                            VALUES (NULL,?,?,?,?)""", query)
-        connect_db.commit()
-        connect_db.close()
-          
+    def write_chat_log(self, query):
+        self.queue.put(query)
+     
+  
+
             
 if __name__ == '__main__':
     #load config file 
@@ -153,8 +163,10 @@ if __name__ == '__main__':
         connect_db.close()
         print("warning: New chat log database was created")
 
+    #Start writing queue for loging chat
+    threading.Thread(target=db_thread, args=(queue,)).start()
 
-    #Account
+    #Connect to account
     jid = config['account']['jid'] 
     password = config['account']['password']
     room = config['account']['room']
@@ -163,16 +175,15 @@ if __name__ == '__main__':
         #debug print('{:<5}| jid'.format(jid))
         print("wrong account parametrs.  exit...")
         sys.exit(78);        
-   
-    xmpp = BBot(jid, password, room, nick)
+    xmpp = BBot(jid, password, room, nick, queue)
 
+    #Load modules
     xmpp.register_plugin('xep_0030') # Service Discovery
     xmpp.register_plugin('xep_0045') # Multi-User Chat
     xmpp.register_plugin('xep_0199') # XMPP Ping
 
     # Connect to the XMPP server and start processing XMPP stanzas.
     if xmpp.connect():
-        
         xmpp.process(block=True)
         print("Done")
     else:
