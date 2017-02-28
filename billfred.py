@@ -1,11 +1,9 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # SleekXMPP: The Sleek XMPP Library   Copyright (C) 2010  Nathanael C. Fritz
-
-
 import sys
 import os
+import argparse
 
 import logging
 import logging.config
@@ -20,25 +18,29 @@ import threading
 import time
 
 
-
-# use UTF-8 encoding
-if sys.version_info < (3, 0):
-    reload(sys)
-    sys.setdefaultencoding('utf8')
-else:
-    raw_input = input
-
-#path + name
-db_full_path=""
-
 # Get billfred logger
 logger = logging.getLogger('billfred')
 
 
-def db_thread(queue):
+def db_thread(path, queue):
     """Thread function that writes log to sqlite db."""
-    logger.debug('Opening database %s', db_full_path)
-    db = sqlite3.connect(db_full_path)
+    logger.info('Opening database %s', path)
+    db = sqlite3.connect(path)
+
+    # Create table if we have a new database
+    cursor = db.cursor()
+    cursor.execute(
+        '''CREATE TABLE IF NOT EXISTS chat_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        time  INTEGER NOT NULL,
+        jit TEXT NOT NULL,
+        name TEXT NOT NULL,
+        message TEXT
+        )'''
+    )
+    cursor.close()
+
+    # Main listening loop
     while True:
         query = queue.get()
         # Stop thread when 'stop' received
@@ -52,12 +54,12 @@ def db_thread(queue):
         )
         cursor.close()
         db.commit()
-    logger.debug('Closing database %s', db_full_path)
+    logger.info('Closing database %s', path)
     db.close()
 
 
 class BBot(sleekxmpp.ClientXMPP):
-
+    """Billfred chat bot."""
     def __init__(self, jid, password, room, nick, queue):
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
@@ -138,57 +140,45 @@ class BBot(sleekxmpp.ClientXMPP):
 
 
 if __name__ == '__main__':
-    #load config file 
+    parser = argparse.ArgumentParser(description='A jabber bot.')
+    parser.add_argument(
+        '--config',
+        default=os.path.join(os.path.dirname(__file__), 'billfred.cfg'),
+        help='path to config file'
+    )
+    args = parser.parse_args()
+
+    # Load config file 
     config = configparser.ConfigParser()
-    config.read('billfred.cfg')
+    config.read(args.config)
 
-    #Setup logging.
-    logging.config.fileConfig('billfred.cfg')
+    # Setup logging.
+    logging.config.fileConfig(args.config)
 
-    # loglevel = config['log']['loglevel']
-    # logging.basicConfig(level=loglevel,
-    #                     format='%(levelname)-8s %(message)s')
-    
-    #Database
-    dbname = config['database']['database_name'] 
-    if not dbname:
-        dbname = config['account']['room'] + "_chatlog.db"
-    dbpath = config['database']['database_path']
-    if not dbpath:
-        dbpath = os.path.dirname(__file__)
-    db_full_path =  os.path.join(dbpath, dbname)
-     
-    if not os.path.isfile(db_full_path):    
-        connect_db = sqlite3.connect(db_full_path)
-        cursor_db = connect_db.cursor()
-        
-        cursor_db.execute("""CREATE TABLE chat_log(id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            time  INTEGER NOT NULL,
-                            jit TEXT NOT NULL,
-                            name TEXT NOT NULL,
-                            message TEXT)""")
-        connect_db.close()
-        logger.warning('New databse was created')
-
-    #Connect to account
-    jid = config['account']['jid'] 
+    jid = config['account']['jid']
     password = config['account']['password']
     room = config['account']['room']
     nick = config['account']['nick']
     if not any([jid, password, room]):
         logger.error('Wrong account parameters, exiting')
         sys.exit(78)
+    
+    # Database
+    db_path = config['database']['database_path']
+    if not db_path:
+        db_path = os.path.join(os.path.dirname(__file__),
+                               '{}_chatlog.db'.format(room))
 
     db_queue = queue.Queue()
     xmpp = BBot(jid, password, room, nick, db_queue)
 
-    #Load modules
+    # Load modules
     xmpp.register_plugin('xep_0030') # Service Discovery
     xmpp.register_plugin('xep_0045') # Multi-User Chat
     xmpp.register_plugin('xep_0199') # XMPP Ping
 
     # Start thread for logging
-    db_thread = threading.Thread(target=db_thread, args=(db_queue,))
+    db_thread = threading.Thread(target=db_thread, args=(db_path, db_queue))
     db_thread.start()
 
     # Connect to the XMPP server and start processing XMPP stanzas.
