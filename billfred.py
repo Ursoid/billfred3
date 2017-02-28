@@ -29,22 +29,24 @@ else:
 
 #path + name
 db_full_path=""
-#Queue for messages  to write
-queue = queue.Queue()
 
 
-#Open sqlite thread  and write log  from queue
 def db_thread(queue):
-    connect_db = sqlite3.connect(db_full_path)
+    """Thread function that writes log to sqlite db."""
+    db = sqlite3.connect(db_full_path)
     while True:
         query = queue.get()
-        cursor_db = connect_db.cursor()
-        #logging.info("DEBUG: Query writing to file")
-        cursor_db.execute("""INSERT INTO chat_log (id, time, jit, name, message)
-                            VALUES (NULL,?,?,?,?)""", query)
-        connect_db.commit()
-        #TODO:  add  EOF command  to queue  for normal  close DB connection
-    connect_db.close()
+        # Stop thread when 'stop' received
+        if query == 'stop':
+            break
+        cursor = db.cursor()
+        cursor.execute(
+            'INSERT INTO chat_log (time, jit, name, message) VALUES (?,?,?,?)',
+            query
+        )
+        cursor.close()
+        db.commit()
+    db.close()
 
 
 class BBot(sleekxmpp.ClientXMPP):
@@ -163,9 +165,6 @@ if __name__ == '__main__':
         connect_db.close()
         print("warning: New chat log database was created")
 
-    #Start writing queue for loging chat
-    threading.Thread(target=db_thread, args=(queue,)).start()
-
     #Connect to account
     jid = config['account']['jid'] 
     password = config['account']['password']
@@ -174,17 +173,28 @@ if __name__ == '__main__':
     if (not jid) or (not password) or (not room):
         #debug print('{:<5}| jid'.format(jid))
         print("wrong account parametrs.  exit...")
-        sys.exit(78);        
-    xmpp = BBot(jid, password, room, nick, queue)
+        sys.exit(78)
+
+    db_queue = queue.Queue()
+    xmpp = BBot(jid, password, room, nick, db_queue)
 
     #Load modules
     xmpp.register_plugin('xep_0030') # Service Discovery
     xmpp.register_plugin('xep_0045') # Multi-User Chat
     xmpp.register_plugin('xep_0199') # XMPP Ping
 
+    # Start thread for logging
+    db_thread = threading.Thread(target=db_thread, args=(db_queue,))
+    db_thread.start()
+
     # Connect to the XMPP server and start processing XMPP stanzas.
-    if xmpp.connect():
-        xmpp.process(block=True)
-        print("Done")
-    else:
-        print("Unable to connect.")
+    try:
+        if xmpp.connect():
+            xmpp.process(block=True)
+        else:
+            print("Unable to connect.")
+    finally:
+        # Always close db thread
+        db_queue.put('stop')
+        db_thread.join()
+    print("Done")
