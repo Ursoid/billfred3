@@ -1,13 +1,12 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # SleekXMPP: The Sleek XMPP Library   Copyright (C) 2010  Nathanael C. Fritz
-
-
 import sys
 import os
+import argparse
 
 import logging
+import logging.config
 
 import sleekxmpp
 import configparser
@@ -19,39 +18,49 @@ import threading
 import time
 
 
-
-# use UTF-8 encoding
-if sys.version_info < (3, 0):
-    reload(sys)
-    sys.setdefaultencoding('utf8')
-else:
-    raw_input = input
-
-#path + name
-db_full_path=""
-#Queue for messages  to write
-queue = queue.Queue()
+# Get billfred logger
+logger = logging.getLogger('billfred')
 
 
-#Open sqlite thread  and write log  from queue
-def db_thread(queue):
-    connect_db = sqlite3.connect(db_full_path)
+def db_thread(path, queue):
+    """Thread function that writes log to sqlite db."""
+    logger.info('Opening database %s', path)
+    db = sqlite3.connect(path)
+
+    # Create table if we have a new database
+    cursor = db.cursor()
+    cursor.execute(
+        '''CREATE TABLE IF NOT EXISTS chat_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        time  INTEGER NOT NULL,
+        jit TEXT NOT NULL,
+        name TEXT NOT NULL,
+        message TEXT
+        )'''
+    )
+    cursor.close()
+
+    # Main listening loop
     while True:
         query = queue.get()
-        cursor_db = connect_db.cursor()
-        #logging.info("DEBUG: Query writing to file")
-        cursor_db.execute("""INSERT INTO chat_log (id, time, jit, name, message)
-                            VALUES (NULL,?,?,?,?)""", query)
-        connect_db.commit()
-        #TODO:  add  EOF command  to queue  for normal  close DB connection
-    connect_db.close()
+        # Stop thread when 'stop' received
+        if query == 'stop':
+            break
+        cursor = db.cursor()
+        logger.debug('Writing %s to database', query)
+        cursor.execute(
+            'INSERT INTO chat_log (time, jit, name, message) VALUES (?,?,?,?)',
+            query
+        )
+        cursor.close()
+        db.commit()
+    logger.info('Closing database %s', path)
+    db.close()
 
 
 class BBot(sleekxmpp.ClientXMPP):
-
+    """Billfred chat bot."""
     def __init__(self, jid, password, room, nick, queue):
-
-        
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
         self.room = room
@@ -64,7 +73,6 @@ class BBot(sleekxmpp.ClientXMPP):
                                self.muc_online)
 
     def start(self, event):
-        
         self.get_roster()
         self.send_presence()
         self.plugin['xep_0045'].joinMUC(self.room,
@@ -72,7 +80,6 @@ class BBot(sleekxmpp.ClientXMPP):
                                         wait=True)
 
     def muc_message(self, msg):
-    
         # Cmopose data and write message to  chat log
         nick = msg['mucnick'] # User nick sowed in chat room
         jid = str(msg['from'])     # ful JID Like user@jabb.en/UserName
@@ -105,18 +112,20 @@ class BBot(sleekxmpp.ClientXMPP):
             #self.try_say_url_info(msg['body'], msg['from'])
 
     def try_ping(self, pingjid, nick):
+        """Ping user."""
+        logger.debug('Got ping from nick "%s" jid "%s"', nick, pingjid)
         try:
             rtt = self['xep_0199'].ping(pingjid,timeout=10)
             self.send_message(mto=pingjid.bare,
                                 mbody="%s, pong is: %s" % (nick, rtt),
                                 mtype='groupchat')
-                #logging.info("Success! RTT: %s", rtt)
+            logger.debug('Successfully pinged %s (%s)', nick, pingjid)
         except IqError as e:
-            logging.info("Error pinging %s: %s",
-                    pingjid,
-                    e.iq['error']['condition'])
+            logger.info("Error pinging %s: %s",
+                        pingjid,
+                        e.iq['error']['condition'])
         except IqTimeout:
-            logging.info("No response from %s", pingjid)
+            logger.info("No response from %s", pingjid)
 
 
     def muc_online(self, presence):
@@ -128,63 +137,58 @@ class BBot(sleekxmpp.ClientXMPP):
 
     def write_chat_log(self, query):
         self.queue.put(query)
-     
-  
 
-            
+
 if __name__ == '__main__':
-    #load config file 
+    parser = argparse.ArgumentParser(description='A jabber bot.')
+    parser.add_argument(
+        '--config',
+        default=os.path.join(os.path.dirname(__file__), 'billfred.cfg'),
+        help='path to config file'
+    )
+    args = parser.parse_args()
+
+    # Load config file 
     config = configparser.ConfigParser()
-    config.read('billfred.cfg')
+    config.read(args.config)
 
-    #Setup logging.
-    loglevel = config['log']['loglevel']
-    logging.basicConfig(level=loglevel,
-                        format='%(levelname)-8s %(message)s')
-    
-    #Database
-    dbname = config['database']['database_name'] 
-    if not dbname:
-        dbname = config['account']['room'] + "_chatlog.db"
-    dbpath = config['database']['database_path']
-    if not dbpath:
-        dbpath = os.path.dirname(__file__)
-    db_full_path =  os.path.join(dbpath, dbname)
-     
-    if not os.path.isfile(db_full_path):    
-        connect_db = sqlite3.connect(db_full_path)
-        cursor_db = connect_db.cursor()
-        
-        cursor_db.execute("""CREATE TABLE chat_log(id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            time  INTEGER NOT NULL,
-                            jit TEXT NOT NULL,
-                            name TEXT NOT NULL,
-                            message TEXT)""")
-        connect_db.close()
-        print("warning: New chat log database was created")
+    # Setup logging.
+    logging.config.fileConfig(args.config)
 
-    #Start writing queue for loging chat
-    threading.Thread(target=db_thread, args=(queue,)).start()
-
-    #Connect to account
-    jid = config['account']['jid'] 
+    jid = config['account']['jid']
     password = config['account']['password']
     room = config['account']['room']
     nick = config['account']['nick']
-    if (not jid) or (not password) or (not room):
-        #debug print('{:<5}| jid'.format(jid))
-        print("wrong account parametrs.  exit...")
-        sys.exit(78);        
-    xmpp = BBot(jid, password, room, nick, queue)
+    if not any([jid, password, room]):
+        logger.error('Wrong account parameters, exiting')
+        sys.exit(78)
+    
+    # Database
+    db_path = config['database']['database_path']
+    if not db_path:
+        db_path = os.path.join(os.path.dirname(__file__),
+                               '{}_chatlog.db'.format(room))
 
-    #Load modules
+    db_queue = queue.Queue()
+    xmpp = BBot(jid, password, room, nick, db_queue)
+
+    # Load modules
     xmpp.register_plugin('xep_0030') # Service Discovery
     xmpp.register_plugin('xep_0045') # Multi-User Chat
     xmpp.register_plugin('xep_0199') # XMPP Ping
 
+    # Start thread for logging
+    db_thread = threading.Thread(target=db_thread, args=(db_path, db_queue))
+    db_thread.start()
+
     # Connect to the XMPP server and start processing XMPP stanzas.
-    if xmpp.connect():
-        xmpp.process(block=True)
-        print("Done")
-    else:
-        print("Unable to connect.")
+    try:
+        if xmpp.connect():
+            xmpp.process(block=True)
+        else:
+            logger.error('Unable to connect')
+    finally:
+        # Always close db thread
+        db_queue.put('stop')
+        db_thread.join()
+    logger.info('Done')
