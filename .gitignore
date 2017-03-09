@@ -1,2 +1,9 @@
 billfred.cfg
+*.db
+*.log
+*.json
+*.swp
+src/bin/
+src/include/
+src/lib/
 
