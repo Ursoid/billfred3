@@ -17,10 +17,11 @@ import threading
 
 import time
 
-
 # Get billfred logger
 logger = logging.getLogger('billfred')
 
+#Bot version
+BOT_VERSION = 0.1
 
 def db_thread(path, queue):
     """Thread function that writes log to sqlite db."""
@@ -88,10 +89,11 @@ class BBot(sleekxmpp.ClientXMPP):
         self.write_chat_log((time_local, jid, nick, message,))
 
         
-        if msg['mucnick'] != self.nick and self.nick in msg['body']:
-            self.send_message(mto=msg['from'].bare,
-                              mbody="I heard that, %s." % msg['mucnick'],
-                              mtype='groupchat')
+        #if msg['mucnick'] != self.nick and self.nick in msg['body']:
+        #    self.send_message(mto=msg['from'].bare,
+        #                      mbody="I heard that, %s." % msg['mucnick'],
+        #                      mtype='groupchat')
+        
         # Disable self-interaction
         if msg['mucnick'] == self.nick:
             return
@@ -106,6 +108,11 @@ class BBot(sleekxmpp.ClientXMPP):
                 ### Ping command
             if command == 'ping':
                 self.try_ping(msg['from'], msg['mucnick'])
+       
+            if command == 'version':
+                self.send_message(mto=msg['from'].bare,
+                                mbody="Bot version: %s." % BOT_VERSION,
+                                mtype='groupchat')
                
         elif "http" in msg['body']:
             return
