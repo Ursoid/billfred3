@@ -20,7 +20,6 @@ import time
 # Get billfred logger
 logger = logging.getLogger('billfred')
 
-#Bot version
 BOT_VERSION = 0.1
 
 def db_thread(path, queue):
