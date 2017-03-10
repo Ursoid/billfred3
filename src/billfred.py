@@ -135,11 +135,12 @@ class BBot(sleekxmpp.ClientXMPP):
 
 
     def muc_online(self, presence):
-        if presence['muc']['nick'] != self.nick:
-            self.send_message(mto=presence['from'].bare,
-                              mbody="Hello, %s %s" % (presence['muc']['role'],
-                                                      presence['muc']['nick']),
-                              mtype='groupchat')
+        #if presence['muc']['nick'] != self.nick:
+        #    self.send_message(mto=presence['from'].bare,
+        #                      mbody="Hello, %s %s" % (presence['muc']['role'],
+        #                                              presence['muc']['nick']),
+        #                      mtype='groupchat')
+        return
 
     def write_chat_log(self, query):
         self.queue.put(query)
