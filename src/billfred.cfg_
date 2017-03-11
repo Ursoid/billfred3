@@ -48,6 +48,11 @@ class = StreamHandler
 args = (sys.stderr,)
 formatter = generic
 
+[rss]
+#rss url +  update inerval  in seconds (0 manual update)
+#feed0=https://news.google.com/?output=rss 600
+#feed1=
+
 # Rotating file logs
 # [handler_file]
 # class = logging.handlers.RotatingFileHandler

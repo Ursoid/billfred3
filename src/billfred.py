@@ -17,10 +17,13 @@ import threading
 
 import time
 
+import feedparser
 
 # Get billfred logger
 logger = logging.getLogger('billfred')
 
+BOT_VERSION = 0.1
+rss_feeds = []
 
 def db_thread(path, queue):
     """Thread function that writes log to sqlite db."""
@@ -88,10 +91,11 @@ class BBot(sleekxmpp.ClientXMPP):
         self.write_chat_log((time_local, jid, nick, message,))
 
         
-        if msg['mucnick'] != self.nick and self.nick in msg['body']:
-            self.send_message(mto=msg['from'].bare,
-                              mbody="I heard that, %s." % msg['mucnick'],
-                              mtype='groupchat')
+        #if msg['mucnick'] != self.nick and self.nick in msg['body']:
+        #    self.send_message(mto=msg['from'].bare,
+        #                      mbody="I heard that, %s." % msg['mucnick'],
+        #                      mtype='groupchat')
+        
         # Disable self-interaction
         if msg['mucnick'] == self.nick:
             return
@@ -106,7 +110,18 @@ class BBot(sleekxmpp.ClientXMPP):
                 ### Ping command
             if command == 'ping':
                 self.try_ping(msg['from'], msg['mucnick'])
-               
+       
+            if command == 'version':
+                self.send_message(mto=msg['from'].bare,
+                                mbody="Bot version: %s." % BOT_VERSION,
+                                mtype='groupchat')
+            if command == 'feeds':
+                for feed in rss_feeds:
+                    self.send_message(mto=msg['from'].bare,
+                                mbody="monitoring:  %s  in %s seconds period." % (feed[0], feed[1]),
+                                mtype='groupchat')
+
+
         elif "http" in msg['body']:
             return
             #self.try_say_url_info(msg['body'], msg['from'])
@@ -129,14 +144,39 @@ class BBot(sleekxmpp.ClientXMPP):
 
 
     def muc_online(self, presence):
-        if presence['muc']['nick'] != self.nick:
-            self.send_message(mto=presence['from'].bare,
-                              mbody="Hello, %s %s" % (presence['muc']['role'],
-                                                      presence['muc']['nick']),
-                              mtype='groupchat')
+        #if presence['muc']['nick'] != self.nick:
+        #    self.send_message(mto=presence['from'].bare,
+        #                      mbody="Hello, %s %s" % (presence['muc']['role'],
+        #                                              presence['muc']['nick']),
+        #                      mtype='groupchat')
+        return
 
     def write_chat_log(self, query):
         self.queue.put(query)
+
+#   def rss_update(self):
+#       url_rss = 'http://rulinux.net/rss'
+#       rss_depth_time = 600
+#       current_time = datetime.datetime.utcnow()
+#
+#       try:
+#           rss = feedparser.parse(url_rss)
+#           for r in rss.entries:
+#               time_rss = datetime.datetime.fromtimestamp(time.mktime(r.published_parsed))
+#               #print current_time
+#               t = current_time - time_rss
+#               #TODO: normal time pars not like {-(3600*3)} for remove 3 hour
+#               time_delta = t.total_seconds()-(3600*3)
+#               if (0 < time_delta)  and (time_delta < rss_depth_time):
+#                   news_title = unicode(r.title)
+#                   news_link  = unicode(r.link)
+#                   self.send_message(mto="rulinux@conference.jabber.ru",
+#                           mbody="RULIN: %s %s" % (news_title, news_link),
+#                           mtype='groupchat')
+#               else:
+#                   break
+#       except:
+#           logging.info("DEBUG: RSS Feed problem, %s" , sys.exc_info()[0])
 
 
 if __name__ == '__main__':
@@ -172,6 +212,10 @@ if __name__ == '__main__':
     db_queue = queue.Queue()
     xmpp = BBot(jid, password, room, nick, db_queue)
 
+    # Load RSS feeds
+    for param in config['rss'].values():
+        rss_feeds.append(param.split(" "))
+   
     # Load modules
     xmpp.register_plugin('xep_0030') # Service Discovery
     xmpp.register_plugin('xep_0045') # Multi-User Chat
