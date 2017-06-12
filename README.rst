@@ -7,17 +7,25 @@ A jabber bot written with python 3. Uses `SleekXMPP`_.
 Install
 =======
 
-Get the source code, install requirements from ``requirements.txt``
-then copy ``billfred.cfg`` somewhere and fill auth data.
+Installation with virtualenv and setup.py::
+
+  python -m venv env
+  ./env/bin/python /path/to/billfred/code/setup.py develop
+
+Libxml is required to compile *lxml* dependency.
+
+Then copy ``billfred/billfred.cfg_`` sowewhere and edit it.
 
 Usage
 =====
 
-Run billfred like this::
+When installed through ``python setup.py develop``, python puts script
+``billfred`` into path (or into virtualenv bin/ directory). Run it
+like this::
 
-  python billfred.py --config /path/to/config.cfg
+  billfred --config /path/to/config.cfg
 
-If ``--config`` isn't specified, ``billfred.cfg`` in source directory
-is used.
+If ``--config`` isn't specified, ``billfred.cfg`` in current directory
+will be used.
 
 .. _SleekXMPP: http://sleekxmpp.com/
