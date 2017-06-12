@@ -18,19 +18,9 @@ setup(
 
     url='https://github.com/Ursoid/billfred3',
     author='Rulinux developers',
-    # Choose your license
     license='MIT',
 
-    classifiers=[
-        'Development Status :: 3 - Alpha',
-        'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
-    ],
-
-    packages=find_packages(exclude=['contrib', 'docs', 'tests']),
+    packages=find_packages(exclude=['docs', 'tests']),
     install_requires=[
         'sleekxmpp',
         'requests',
