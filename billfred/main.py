@@ -8,6 +8,7 @@ import configparser
 
 from billfred.billfred import Billfred
 from billfred.database import db_thread
+from billfred.links import links_thread
 
 
 logger = logging.getLogger(__name__)
@@ -44,11 +45,17 @@ def main():
         db_path = '{}_chatlog.db'.format(room)
 
     db_queue = queue.Queue()
-    xmpp = Billfred(jid, password, room, nick, db_queue)
+    to_links = queue.Queue()
+    from_links = queue.Queue()
+    xmpp = Billfred(jid, password, room, nick, db_queue, to_links, from_links)
 
     # Start thread for logging
     db_thr = threading.Thread(target=db_thread, args=(db_path, db_queue))
     db_thr.start()
+
+    # Start links parser thread
+    links_thr = threading.Thread(target=links_thread, args=(to_links, from_links))
+    links_thr.start()
 
     # Connect to the XMPP server and start processing XMPP stanzas.
     try:
@@ -57,8 +64,8 @@ def main():
         else:
             logger.error('Unable to connect')
     finally:
-        # Always close db thread
-        db_queue.put('stop')
+        # Always close threads
+        [q.put('stop') for q in (db_queue, to_links)]
         db_thr.join()
     logger.info('Done')
 

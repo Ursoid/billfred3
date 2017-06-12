@@ -32,7 +32,9 @@ setup(
 
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     install_requires=[
-        'sleekxmpp'
+        'sleekxmpp',
+        'requests',
+        'lxml'
     ],
 
     include_package_data=True,
