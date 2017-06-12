@@ -1,0 +1,3 @@
+include README.rst
+include docs/xmpp_bot.service
+include billfred/billfred.cfg_

@@ -1,9 +1,15 @@
 billfred.cfg
+*.egg
+*.egg-info
+*.pyc
+*$py.class
+*~
+\#*#
 *.db
 *.log
 *.json
 *.swp
+/env/
 src/bin/
 src/include/
 src/lib/
-
