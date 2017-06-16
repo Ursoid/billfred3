@@ -8,6 +8,21 @@ nick=
 [database]
 database_path=
 
+# Add section for every RSS feed
+# prefix used as identifier in bot message
+# url is URL of RSS feed
+# time is interval between checks
+
+# [rss_feed1]
+# prefix = FEED1
+# url = https://domain.tld/rss
+# time = 600
+
+# [rss_feed2]
+# prefix = FEED2
+# url = http://domain2.tld/rss.xml
+# time = 300
+
 
 # Logging config
 [loggers]

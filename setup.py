@@ -24,7 +24,8 @@ setup(
     install_requires=[
         'sleekxmpp',
         'requests',
-        'lxml'
+        'lxml',
+        'feedparser',
     ],
 
     include_package_data=True,

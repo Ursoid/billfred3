@@ -69,7 +69,8 @@ def links_thread(queue_in, queue_out):
             logger.info('Processing link: %s', link['link'])
             title = get_title(link['link'])
             if title is not None:
-                queue_out.put({'to': link['to'], 'title': title})
+                queue_out.put({'to': link['to'],
+                               'message': 'TITLE: {}'.format(title)})
             if len(links) > 1:
                 time.sleep(LINK_INTERVAL)
         # Just sleep for some time to reduce load

@@ -16,8 +16,8 @@ class Billfred(sleekxmpp.ClientXMPP):
     # Amount of processed links in one message
     links_limit = 3
 
-    def __init__(self, jid, password, room, nick, db_queue,
-                 to_links_queue, from_links_queue):
+    def __init__(self, jid, password, room, nick, rss, db_queue,
+                 to_links_queue, to_rss_queue, msg_queue):
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
         # Load modules
@@ -26,9 +26,11 @@ class Billfred(sleekxmpp.ClientXMPP):
 
         self.room = room
         self.nick = nick
+        self.rss = rss
         self.db_queue = db_queue
         self.to_links_queue = to_links_queue
-        self.from_links_queue = from_links_queue
+        self.to_rss = to_rss_queue
+        self.msg_queue = msg_queue
 
         self.add_event_handler("session_start", self.start)
         self.add_event_handler("groupchat_message", self.muc_message)
@@ -40,16 +42,35 @@ class Billfred(sleekxmpp.ClientXMPP):
         self.plugin['xep_0045'].joinMUC(self.room,
                                         self.nick,
                                         wait=True)
-        self.schedule('links_check', 1, self.check_links, repeat=True)
+        self.schedule('messages_check', 1, self.check_messages, repeat=True)
 
-    def check_links(self):
-        """Check if processed links queue isn't empty."""
+        # Add RSS checks to scheduler and do first check 
+        i = 0
+        for prefix, url, time in self.rss:
+            logger.info('Adding RSS task %s %s every %s seconds',
+                        prefix, url, time)
+            # First run to get initial articles, do it with interval
+            self.schedule('rss_check_{}'.format(prefix), i * 5,
+                          self.check_rss(prefix, url), repeat=False)
+            i += 1
+            # Now schedule periodic checks
+            self.schedule('rss_check_{}'.format(prefix), time,
+                          self.check_rss(prefix, url), repeat=True)
+
+    def check_rss(self, prefix, url):
+        """Return function that will put RSS check task."""
+        def do_check():
+            self.to_rss.put((prefix, url))
+        return do_check
+
+    def check_messages(self):
+        """Check if new messages from threads are available."""
         try:
-            msg = self.from_links_queue.get_nowait()
+            msg = self.msg_queue.get_nowait()
             if msg:
                 self.event("send_bot_message", {
-                    'to': msg['to'],
-                    'message': 'TITLE: {}'.format(msg['title'])
+                    'to': msg.get('to', self.room),
+                    'message': msg['message']
                 })
         except queue.Empty:
             pass
