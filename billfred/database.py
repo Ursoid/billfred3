@@ -14,8 +14,9 @@ def db_thread(path, queue):
     cursor.execute(
         '''CREATE TABLE IF NOT EXISTS chat_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room TEXT NOT NULL,
         time  INTEGER NOT NULL,
-        jit TEXT NOT NULL,
+        jid TEXT NOT NULL,
         name TEXT NOT NULL,
         message TEXT
         )'''
@@ -32,7 +33,7 @@ def db_thread(path, queue):
             cursor = db.cursor()
             logger.debug('Writing %s to database', query)
             cursor.execute(
-                'INSERT INTO chat_log (time, jit, name, message) VALUES (?,?,?,?)',
+                'INSERT INTO chat_log (room, time, jid, name, message) VALUES (?,?,?,?,?)',
                 query
             )
             cursor.close()

@@ -1,9 +1,20 @@
 [account]
 jid=
 password=
+
+# Add section for every room
+# name specified in section name [room_{name}]
+# this name is used as room id in config later
+[room_room1]
 room=
-room_password=
+password=
 nick=
+
+# [room_room2]
+# name=room2
+# room=
+# room_password=
+# nick=
 
 [database]
 # Full path to sqlite database for chat logs
@@ -13,17 +24,19 @@ database_path=
 # prefix used as identifier in bot message
 # url is URL of RSS feed
 # time is interval between checks
+# rooms is comma-separated list of rooms where feed is posted
 
 # [rss_feed1]
 # prefix = FEED1
 # url = https://domain.tld/rss
 # time = 600
+# rooms = room1, room2
 
 # [rss_feed2]
 # prefix = FEED2
 # url = http://domain2.tld/rss.xml
 # time = 300
-
+# rooms = room1
 
 # Logging config
 

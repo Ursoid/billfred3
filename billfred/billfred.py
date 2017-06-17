@@ -16,7 +16,7 @@ class Billfred(sleekxmpp.ClientXMPP):
     # Amount of processed links in one message
     links_limit = 3
 
-    def __init__(self, jid, password, room, nick, rss, db_queue,
+    def __init__(self, jid, password, rooms, rss, db_queue,
                  to_links_queue, to_rss_queue, msg_queue):
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
@@ -24,8 +24,7 @@ class Billfred(sleekxmpp.ClientXMPP):
         self.register_plugin('xep_0045') # Multi-User Chat
         self.register_plugin('xep_0199') # XMPP Ping
 
-        self.room = room
-        self.nick = nick
+        self.rooms = rooms
         self.rss = rss
         self.db_queue = db_queue
         self.to_links_queue = to_links_queue
@@ -39,28 +38,41 @@ class Billfred(sleekxmpp.ClientXMPP):
     def start(self, event):
         self.get_roster()
         self.send_presence()
-        self.plugin['xep_0045'].joinMUC(self.room,
-                                        self.nick,
-                                        wait=True)
+
+        # Join all mucs
+        for name, room in self.rooms.items():
+            self.plugin['xep_0045'].joinMUC(room['room'],
+                                            room['nick'],
+                                            password=room['password'],
+                                            wait=True)
+
         self.schedule('messages_check', 1, self.check_messages, repeat=True)
 
         # Add RSS checks to scheduler and do first check 
         i = 0
-        for prefix, url, time in self.rss:
+        for rss in self.rss:
             logger.info('Adding RSS task %s %s every %s seconds',
-                        prefix, url, time)
+                        rss['prefix'], rss['url'], rss['time'])
             # First run to get initial articles, do it with interval
-            self.schedule('rss_check_{}'.format(prefix), i * 5,
-                          self.check_rss(prefix, url), repeat=False)
+            self.schedule(
+                'rss_check_{}'.format(rss['prefix']),
+                i * 5,
+                self.check_rss(rss['rooms'], rss['prefix'], rss['url']),
+                repeat=False
+            )
             i += 1
             # Now schedule periodic checks
-            self.schedule('rss_check_{}'.format(prefix), time,
-                          self.check_rss(prefix, url), repeat=True)
+            self.schedule(
+                'rss_check_{}'.format(rss['prefix']),
+                rss['time'],
+                self.check_rss(rss['rooms'], rss['prefix'], rss['url']),
+                repeat=True
+            )
 
-    def check_rss(self, prefix, url):
+    def check_rss(self, rooms, prefix, url):
         """Return function that will put RSS check task."""
         def do_check():
-            self.to_rss.put((prefix, url))
+            self.to_rss.put((rooms, prefix, url))
         return do_check
 
     def check_messages(self):
@@ -69,7 +81,7 @@ class Billfred(sleekxmpp.ClientXMPP):
             msg = self.msg_queue.get_nowait()
             if msg:
                 self.event("send_bot_message", {
-                    'to': msg.get('to', self.room),
+                    'to': msg['to'],
                     'message': msg['message']
                 })
         except queue.Empty:
@@ -85,24 +97,37 @@ class Billfred(sleekxmpp.ClientXMPP):
         """Process message and do actions depending on its content."""
         nick = msg['mucnick']   # User nick sowed in chat room
         jid = str(msg['from'])  # ful JID Like user@jabb.en/UserName
+        room_jid = msg['from'].bare
         message = msg['body']   # Message body
         time_local = time.time()
-        self.write_chat_log((time_local, jid, nick, message,))
+
+        # Get room config for message
+        current_room = None
+        for name, room in self.rooms.items():
+            if room['room'] == room_jid:
+                current_room = room
+                break
+        if current_room is None:
+            # What?
+            self.logger.error('Message from unknown room: %s', msg)
+            return
+        
+        self.write_chat_log((room['room'], time_local, jid, nick, message))
         
         # Disable self-interaction
-        if msg['mucnick'] == self.nick:
+        if msg['mucnick'] == room['nick']:
             return
 
         # Link title parser
         if 'http' in message:
             links = extract_links(message)
             self.to_links_queue.put([
-                {'to': msg['from'].bare, 'link': l}
+                {'to': room_jid, 'link': l}
                 for l in links[:self.links_limit]
             ])
 
         # Bot command parser
-        if msg['body'].startswith(self.nick):
+        if msg['body'].startswith(room['nick']):
 
             tokens = msg['body'].split()
             if len(tokens) > 1:
@@ -113,9 +138,9 @@ class Billfred(sleekxmpp.ClientXMPP):
                 self.try_ping(msg['from'], msg['mucnick'])
        
             if command == 'version':
-                self.send_message(mto=msg['from'].bare,
-                                mbody="Bot version: %s." % BOT_VERSION,
-                                mtype='groupchat')
+                self.send_message(mto=room_jid,
+                                  mbody="Bot version: %s." % BOT_VERSION,
+                                  mtype='groupchat')
 
     def try_ping(self, pingjid, nick):
         """Ping user."""

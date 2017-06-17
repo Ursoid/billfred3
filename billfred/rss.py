@@ -47,8 +47,11 @@ def rss_thread(queue_in, queue_out):
             # Stop thread when 'stop' received
             if msg == 'stop':
                 break
-            entries = process_feed(*msg)
-            if entries is not None:
-                queue_out.put({'message': '\n'.join(entries)})
+            entries = process_feed(*msg[1:])
+            if entries:
+                # Send message to all rooms
+                for room in msg[0]:
+                    queue_out.put({'to': room,
+                                   'message': '\n'.join(entries)})
         except Exception as e:
             logger.exception('Feed thread error')

@@ -32,34 +32,49 @@ def main():
     # Setup logging.
     logging.config.fileConfig(args.config)
 
-    jid = config['account']['jid']
-    password = config['account']['password']
-    room = config['account']['room']
-    nick = config['account']['nick']
-    if not any([jid, password, room]):
+    jid = config['account']['jid'].strip()
+    password = config['account']['password'].strip()
+
+    if not any([jid, password]):
         logger.error('Wrong account parameters, exiting')
         sys.exit(78)
-    
-    # Database
-    db_path = config['database']['database_path']
-    if not db_path:
-        db_path = '{}_chatlog.db'.format(room)
 
-    # RSS tasks
+    # Get all rooms
+    rooms = {}
+    for section in config.sections():
+        if section.startswith('room_'):
+            # Add an account
+            name = section.replace('room_', '')
+            rooms[name] = {}
+            for key in (('room', 'password', 'nick')):
+                rooms[name][key] = config[section][key]
+
+    # Get all RSS feeds. Doing it after rooms check because feed
+    # references room.
     rss_tasks = []
     for section in config.sections():
         if section.startswith('rss_'):
-            rss_tasks.append([
-                config[section]['prefix'],
-                config[section]['url'],
-                int(config[section]['time'])
-            ])
+            # Add RSS task
+            room_names = [r.strip() for r in config[section]['rooms'].split(',')]
+            room_jids = [rooms[name]['room']
+                         for name in room_names if name in rooms]
+            rss_tasks.append({
+                'prefix': config[section]['prefix'],
+                'url': config[section]['url'],
+                'rooms': room_jids,
+                'time': config.getint(section, 'time')
+            })
+
+    # Database
+    db_path = config['database']['database_path']
+    if not db_path:
+        db_path = 'billfred_chatlog.db'
 
     db_queue = queue.Queue()
     to_links = queue.Queue()
     to_rss = queue.Queue()
     msg_q = queue.Queue()
-    xmpp = Billfred(jid, password, room, nick, rss_tasks, db_queue,
+    xmpp = Billfred(jid, password, rooms, rss_tasks, db_queue,
                     to_links, to_rss, msg_q)
 
     # Start thread for logging
