@@ -48,7 +48,7 @@ def rss_thread(queue_in, queue_out):
             if msg == 'stop':
                 break
             entries = process_feed(*msg)
-            if entries is not None:
+            if entries:
                 queue_out.put({'message': '\n'.join(entries)})
         except Exception as e:
             logger.exception('Feed thread error')
