@@ -82,6 +82,8 @@ def main():
             xmpp.process(block=True)
         else:
             logger.error('Unable to connect')
+    except Exception as e:
+        logger.exception('Error on xmpp connect')
     finally:
         # Always close threads
         [q.put('stop') for q in (db_queue, to_links, to_rss)]

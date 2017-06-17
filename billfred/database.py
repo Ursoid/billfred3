@@ -23,19 +23,22 @@ def db_thread(path, queue):
     cursor.close()
 
     # Main listening loop
-    while True:
-        query = queue.get()
-        # Stop thread when 'stop' received
-        if query == 'stop':
-            break
-        cursor = db.cursor()
-        logger.debug('Writing %s to database', query)
-        cursor.execute(
-            'INSERT INTO chat_log (time, jit, name, message) VALUES (?,?,?,?)',
-            query
-        )
-        cursor.close()
-        db.commit()
-    logger.info('Closing database %s', path)
-    db.close()
-    
+    try:
+        while True:
+            query = queue.get()
+            # Stop thread when 'stop' received
+            if query == 'stop':
+                break
+            cursor = db.cursor()
+            logger.debug('Writing %s to database', query)
+            cursor.execute(
+                'INSERT INTO chat_log (time, jit, name, message) VALUES (?,?,?,?)',
+                query
+            )
+            cursor.close()
+            db.commit()
+    except Exception as e:
+        logger.exception('Database error')
+    finally:
+        logger.info('Closing database %s', path)
+        db.close()
