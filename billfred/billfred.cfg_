@@ -6,9 +6,10 @@ room_password=
 nick=
 
 [database]
+# Full path to sqlite database for chat logs
 database_path=
 
-# Add section for every RSS feed
+# Add section for every RSS feed, rss_* prefix in name is required
 # prefix used as identifier in bot message
 # url is URL of RSS feed
 # time is interval between checks
@@ -25,6 +26,7 @@ database_path=
 
 
 # Logging config
+
 [loggers]
 keys = root,billfred,sleekxmpp
 
@@ -39,12 +41,14 @@ keys = generic
 [logger_root]
 level = INFO
 handlers = console
+# handlers = file, mail
 
 # Settings for sleekxmpp
 [logger_sleekxmpp]
 level = INFO
 qualname = sleekxmpp
 handlers = console
+# handlers = file, mail
 propagate = 0
 
 [logger_billfred]

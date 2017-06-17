@@ -5,7 +5,7 @@ User=bot
 Group=bot
 Restart=always
 RestartSec=120
-ExecStart=/path/to/local/python3  /path/to/bot/billfred.py 
+ExecStart=/path/to/bin/billfred --config /path/to/billfred.cfg
 
 Environment="LANG=en_US.UTF-8"
 StandardOutput=journal

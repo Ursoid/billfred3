@@ -62,8 +62,6 @@ def main():
     xmpp = Billfred(jid, password, room, nick, rss_tasks, db_queue,
                     to_links, to_rss, msg_q)
 
-    # FIXME thread exception handling
-
     # Start thread for logging
     db_thr = threading.Thread(target=db_thread, args=(db_path, db_queue))
     db_thr.start()
