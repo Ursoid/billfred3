@@ -37,11 +37,17 @@ class Billfred(sleekxmpp.ClientXMPP):
         self.add_event_handler("send_bot_message", self.send_bot_message)
 
     def start(self, event):
-        self.get_roster()
-        self.send_presence()
-        self.plugin['xep_0045'].joinMUC(self.room,
-                                        self.nick,
-                                        wait=True)
+        try:
+            self.get_roster()
+            self.send_presence()
+            self.plugin['xep_0045'].joinMUC(self.room,
+                                            self.nick,
+                                            wait=True)
+        except (IqError, IqTimeout) as e:
+            logger.exception('Error on MUC join: %s', e)
+            self.disconnect()
+            return
+
         self.schedule('messages_check', 1, self.check_messages, repeat=True)
 
         # Add RSS checks to scheduler and do first check 
@@ -77,9 +83,17 @@ class Billfred(sleekxmpp.ClientXMPP):
 
     def send_bot_message(self, data):
         """Send message from bot."""
-        self.send_message(mto=data['to'],
-                          mbody=data['message'],
-                          mtype='groupchat')
+        try:
+            self.send_message(mto=data['to'],
+                              mbody=data['message'],
+                              mtype='groupchat')
+        except IqError as e:
+            logger.info("Error sending message to %s: %s",
+                        data['to'],
+                        e.iq['error']['condition'])
+        except IqTimeout:
+            logger.info("No response from %s", data['to'])
+
 
     def muc_message(self, msg):
         """Process message and do actions depending on its content."""
@@ -113,9 +127,10 @@ class Billfred(sleekxmpp.ClientXMPP):
                 self.try_ping(msg['from'], msg['mucnick'])
        
             if command == 'version':
-                self.send_message(mto=msg['from'].bare,
-                                mbody="Bot version: %s." % BOT_VERSION,
-                                mtype='groupchat')
+                self.send_bot_message({
+                    'to': msg['from'].bare,
+                    'message': "Bot version: {}".format(BOT_VERSION)
+                })
 
     def try_ping(self, pingjid, nick):
         """Ping user."""
@@ -123,8 +138,8 @@ class Billfred(sleekxmpp.ClientXMPP):
         try:
             rtt = self['xep_0199'].ping(pingjid,timeout=10)
             self.send_message(mto=pingjid.bare,
-                                mbody="%s, pong is: %s" % (nick, rtt),
-                                mtype='groupchat')
+                              mbody="%s, pong is: %s" % (nick, rtt),
+                              mtype='groupchat')
             logger.debug('Successfully pinged %s (%s)', nick, pingjid)
         except IqError as e:
             logger.info("Error pinging %s: %s",
