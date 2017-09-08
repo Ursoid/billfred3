@@ -40,11 +40,7 @@ def get_title(url):
         if mimetype not in ALLOWED_TYPES:
             logger.debug('Not allowed: %s, %s', url, mimetype)
             return
-        if 'charset' in r.headers.get('content-type', '').lower():
-            data = r.text
-        else:
-            data = r.content
-        tree = fromstring(data)
+        tree = fromstring(r.content)
         title = tree.xpath('//title/text()')
         if title:
             title = title[0].strip()
@@ -53,6 +49,8 @@ def get_title(url):
         logger.debug('Title not found: %s', url)
     except requests.exceptions.RequestException as e:
         logger.debug('Error: %s', e)
+    except Exception as e:
+        logger.exception('Unhandled exception: %s', e)
     finally:
         if r is not None:
             r.close()
