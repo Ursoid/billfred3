@@ -40,7 +40,11 @@ def get_title(url):
         if mimetype not in ALLOWED_TYPES:
             logger.debug('Not allowed: %s, %s', url, mimetype)
             return
-        tree = fromstring(r.content)
+        if r.text.lstrip().startswith('<?xml'):
+            data = r.content
+        else:
+            data = r.text
+        tree = fromstring(data)
         title = tree.xpath('//title/text()')
         if title:
             title = title[0].strip()
