@@ -36,6 +36,21 @@ class Billfred(sleekxmpp.ClientXMPP):
         self.add_event_handler("groupchat_message", self.muc_message)
         self.add_event_handler("send_bot_message", self.send_bot_message)
 
+        self.schedule('messages_check', 1, self.check_messages, repeat=True)
+
+        # Add RSS checks to scheduler and do first check 
+        i = 1
+        for prefix, url, time in self.rss:
+            logger.info('Adding RSS task %s %s every %s seconds',
+                        prefix, url, time)
+            # First run to get initial articles, do it with interval
+            self.schedule('rss_check_{}'.format(prefix), i * 5,
+                          self.check_rss(prefix, url), repeat=False)
+            i += 1
+            # Now schedule periodic checks
+            self.schedule('rss_check_{}'.format(prefix), time,
+                          self.check_rss(prefix, url), repeat=True)
+
     def start(self, event):
         try:
             self.get_roster()
@@ -47,21 +62,6 @@ class Billfred(sleekxmpp.ClientXMPP):
             logger.exception('Error on MUC join: %s', e)
             self.disconnect()
             return
-
-        self.schedule('messages_check', 1, self.check_messages, repeat=True)
-
-        # Add RSS checks to scheduler and do first check 
-        i = 0
-        for prefix, url, time in self.rss:
-            logger.info('Adding RSS task %s %s every %s seconds',
-                        prefix, url, time)
-            # First run to get initial articles, do it with interval
-            self.schedule('rss_check_{}'.format(prefix), i * 5,
-                          self.check_rss(prefix, url), repeat=False)
-            i += 1
-            # Now schedule periodic checks
-            self.schedule('rss_check_{}'.format(prefix), time,
-                          self.check_rss(prefix, url), repeat=True)
 
     def check_rss(self, prefix, url):
         """Return function that will put RSS check task."""
