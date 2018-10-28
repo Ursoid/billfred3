@@ -3,6 +3,7 @@ import sleekxmpp
 import time
 import logging
 import queue
+from sleekxmpp.exceptions import IqError, IqTimeout
 
 from billfred.links import extract_links
 
