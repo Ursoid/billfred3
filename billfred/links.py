@@ -40,7 +40,8 @@ def get_title(url):
         if mimetype not in ALLOWED_TYPES:
             logger.debug('Not allowed: %s, %s', url, mimetype)
             return
-        if r.text.lstrip().startswith('<?xml'):
+        if (r.text.lstrip().startswith('<?xml') or
+            'charset' not in r.headers.get('content-type')):
             data = r.content
         else:
             data = r.text
