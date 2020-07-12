@@ -21,8 +21,24 @@ LINK_RE = re.compile(r'https?://[^\s]+')
 
 def is_allowed(url):
     """Check if url isn't blacklisted."""
-    parsed_link = urlsplit(url.lower())
-    return parsed_link.path.split('.')[-1] not in EXT_BLACKLIST
+    parsed_url = urlsplit(url.lower())
+    return parsed_url.path.split('.')[-1] not in EXT_BLACKLIST
+
+
+def extract_title(url, data):
+    """Extract title from site content for specific url."""
+    parsed_url = urlsplit(url.lower())
+    tree = fromstring(data)
+    title = None
+    if ('youtube.com' in parsed_url.netloc or
+        'youtu.be' in parsed_url.netloc):
+        title = tree.xpath('//meta[@name="title"]/@content')
+        if title:
+            return '{} - YouTube'.format(title[0].strip())
+    else:
+        title = tree.xpath('//title/text()')
+        if title:
+            return title[0].strip()
 
 
 def get_title(url):
@@ -45,10 +61,8 @@ def get_title(url):
             data = r.content
         else:
             data = r.text
-        tree = fromstring(data)
-        title = tree.xpath('//title/text()')
+        title = extract_title(r.url, data)
         if title:
-            title = title[0].strip()
             logger.info('Found title: %s, %s', url, title)
             return title
         logger.debug('Title not found: %s', url)
