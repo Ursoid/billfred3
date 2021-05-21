@@ -6,6 +6,7 @@ import queue
 from sleekxmpp.exceptions import IqError, IqTimeout
 
 from billfred.links import extract_links
+from billfred.eliza import analyze
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ BOT_VERSION = 0.1
 class Billfred(sleekxmpp.ClientXMPP):
     """Billfred chat bot."""
     # Amount of processed links in one message
-    links_limit = 3
+    links_limit = 0
 
     def __init__(self, jid, password, room, nick, rss, db_queue,
                  to_links_queue, to_rss_queue, msg_queue):
@@ -126,11 +127,20 @@ class Billfred(sleekxmpp.ClientXMPP):
                 ### Ping command
             if command == 'ping':
                 self.try_ping(msg['from'], msg['mucnick'])
-       
-            if command == 'version':
+            elif command == 'version':
                 self.send_bot_message({
                     'to': msg['from'].bare,
                     'message': "Bot version: {}".format(BOT_VERSION)
+                })
+            elif command == 'test':
+                self.send_bot_message({
+                    'to': msg['from'].bare,
+                    'message': "Custom command test. Bot version: {}".format(BOT_VERSION)
+                })
+            else:
+                self.send_bot_message({
+                    'to': msg['from'].bare,
+                    'message': analyze( msg['body'] )
                 })
 
     def try_ping(self, pingjid, nick):
