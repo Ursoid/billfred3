@@ -61,6 +61,7 @@ def main():
     msg_q = queue.Queue()
     xmpp = Billfred(jid, password, room, nick, rss_tasks, db_queue,
                     to_links, to_rss, msg_q)
+    xmpp.ssl_version = ssl.PROTOCOL_TLSv1_2
 
     # Start thread for logging
     db_thr = threading.Thread(target=db_thread, args=(db_path, db_queue))
