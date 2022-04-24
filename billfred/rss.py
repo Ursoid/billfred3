@@ -32,7 +32,11 @@ def process_feed(prefix, url):
             continue
         if entry.published_parsed > max_date:
             max_date = entry.published_parsed
-        entries.append('{}: {} {}'.format(prefix, entry.title, entry.link))
+        shitty_htm = entry.content[0].value
+        tree = fromstring( shitty_htm )
+        a = tree.xpath('//div')
+        circumcised_content = a[1].text_content()[0:255]
+        entries.append('{}: {} {} {}'.format(prefix, circumcised_content, entry.title, entry.link))
 
     last_dates[prefix] = max_date
     logger.info('RSS %s processed, %s new entries', prefix, len(entries))
