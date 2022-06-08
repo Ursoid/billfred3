@@ -16,7 +16,7 @@ BOT_VERSION = 0.1
 class Billfred(sleekxmpp.ClientXMPP):
     """Billfred chat bot."""
     # Amount of processed links in one message
-    links_limit = 0
+    links_limit = 3
 
     def __init__(self, jid, password, room, nick, rss, db_queue,
                  to_links_queue, to_rss_queue, msg_queue):
