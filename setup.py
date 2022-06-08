@@ -11,7 +11,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='billfred',
-    version='0.1',
+    version='0.2',
 
     description='A simple jabber bot',
     long_description=long_description,
@@ -22,7 +22,7 @@ setup(
 
     packages=find_packages(exclude=['docs', 'tests']),
     install_requires=[
-        'sleekxmpp',
+        'slixmpp',
         'requests',
         'lxml',
         'feedparser',

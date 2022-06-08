@@ -2,7 +2,7 @@
 Billfred
 ========
 
-A jabber bot written with python 3. Uses `SleekXMPP`_.
+A jabber bot written with python 3. Uses `Slixmpp`_.
 
 Install
 =======
@@ -35,4 +35,4 @@ like this::
 If ``--config`` isn't specified, ``billfred.cfg`` in current directory
 will be used.
 
-.. _SleekXMPP: http://sleekxmpp.com/
+.. _Slixmpp: https://lab.louiz.org/poezio/slixmpp

@@ -1,67 +1,45 @@
-#!/usr/bin/env python
-import sleekxmpp
+import slixmpp
 import time
 import logging
-import queue
-from sleekxmpp.exceptions import IqError, IqTimeout
+import asyncio
+# import queue
+from slixmpp.exceptions import XMPPError, IqError, IqTimeout
 
 from billfred.links import extract_links
 from billfred.eliza import analyze
 
 logger = logging.getLogger(__name__)
 
-BOT_VERSION = 0.1
+BOT_VERSION = 0.2
 
 
-class Billfred(sleekxmpp.ClientXMPP):
+class Billfred(slixmpp.ClientXMPP):
     """Billfred chat bot."""
     # Amount of processed links in one message
     links_limit = 3
 
-    def __init__(self, jid, password, room, nick, rss, db_queue,
-                 to_links_queue, to_rss_queue, to_wiki_queue, msg_queue):
-        sleekxmpp.ClientXMPP.__init__(self, jid, password)
+    def __init__(self, jid, password, room, nick):
+        super().__init__(jid, password)
 
         # Load modules
-        self.register_plugin('xep_0045') # Multi-User Chat
-        self.register_plugin('xep_0199') # XMPP Ping
+        self.register_plugin('xep_0045')  # Multi-User Chat
+        self.register_plugin('xep_0199')  # XMPP Ping
 
         self.room = room
         self.nick = nick
-        self.rss = rss
-        self.db_queue = db_queue
-        self.to_links_queue = to_links_queue
-        self.to_rss = to_rss_queue
-        self.to_wiki_queue = to_wiki_queue
-        self.msg_queue = msg_queue
-
         self.add_event_handler("session_start", self.start)
         self.add_event_handler("groupchat_message", self.muc_message)
         self.add_event_handler("send_bot_message", self.send_bot_message)
 
-        self.schedule('messages_check', 1, self.check_messages, repeat=True)
-
-        # Add RSS checks to scheduler and do first check 
-        i = 1
-        for prefix, url, time in self.rss:
-            logger.info('Adding RSS task %s %s every %s seconds',
-                        prefix, url, time)
-            # First run to get initial articles, do it with interval
-            self.schedule('rss_check_{}'.format(prefix), i * 5,
-                          self.check_rss(prefix, url), repeat=False)
-            i += 1
-            # Now schedule periodic checks
-            self.schedule('rss_check_{}'.format(prefix), time,
-                          self.check_rss(prefix, url), repeat=True)
-
-    def start(self, event):
+    async def start(self, event):
         try:
-            self.get_roster()
+            await self.get_roster()
             self.send_presence()
-            self.plugin['xep_0045'].joinMUC(self.room,
-                                            self.nick,
-                                            wait=True)
-        except (IqError, IqTimeout) as e:
+            # FIXME password
+            await self.plugin['xep_0045'].join_muc(self.room,
+                                                   self.nick)
+            logger.info('Connected to %s as %s', self.room, self.nick)
+        except XMPPError as e:
             logger.exception('Error on MUC join: %s', e)
             self.disconnect()
             return
@@ -104,7 +82,7 @@ class Billfred(sleekxmpp.ClientXMPP):
         jid = str(msg['from'])  # ful JID Like user@jabb.en/UserName
         message = msg['body']   # Message body
         time_local = time.time()
-        self.write_chat_log((time_local, jid, nick, message,))
+        # self.write_chat_log((time_local, jid, nick, message,))
         
         # Disable self-interaction
         if msg['mucnick'] == self.nick:
@@ -127,7 +105,7 @@ class Billfred(sleekxmpp.ClientXMPP):
                
             # Ping command
             if command == 'ping':
-                self.try_ping(msg['from'], msg['mucnick'])
+                asyncio.create_task(self.try_ping(msg['from'], msg['mucnick']))
             elif command == 'version':
                 self.send_bot_message({
                     'to': msg['from'].bare,
@@ -153,14 +131,14 @@ class Billfred(sleekxmpp.ClientXMPP):
             else:
                 self.send_bot_message({
                     'to': msg['from'].bare,
-                    'message': analyze( msg['body'] )
+                    'message': analyze(msg['body'])
                 })
 
-    def try_ping(self, pingjid, nick):
+    async def try_ping(self, pingjid, nick):
         """Ping user."""
         logger.debug('Got ping from nick "%s" jid "%s"', nick, pingjid)
         try:
-            rtt = self['xep_0199'].ping(pingjid,timeout=10)
+            rtt = await self['xep_0199'].ping(pingjid, timeout=10)
             self.send_message(mto=pingjid.bare,
                               mbody="%s, pong is: %s" % (nick, rtt),
                               mtype='groupchat')

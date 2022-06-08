@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys
 import ssl
 import queue
@@ -9,10 +10,10 @@ import configparser
 import ssl
 
 from billfred.billfred import Billfred
-from billfred.database import db_thread
-from billfred.links import links_thread
-from billfred.rss import rss_thread
-from billfred.wiki import wiki_thread
+# from billfred.database import db_thread
+# from billfred.links import links_thread
+# from billfred.rss import rss_thread
+# from billfred.wiki import wiki_thread
 
 
 logger = logging.getLogger(__name__)
@@ -58,43 +59,42 @@ def main():
                 int(config[section]['time'])
             ])
 
-    db_queue = queue.Queue()
-    to_links = queue.Queue()
-    to_rss = queue.Queue()
-    to_wiki = queue.Queue()
-    msg_q = queue.Queue()
-    xmpp = Billfred(jid, password, room, nick, rss_tasks, db_queue,
-                    to_links, to_rss, to_wiki, msg_q)
-    xmpp.ssl_version = ssl.PROTOCOL_TLSv1_2
+    # db_queue = queue.Queue()
+    # to_links = queue.Queue()
+    # to_rss = queue.Queue()
+    # to_wiki = queue.Queue()
+    # msg_q = queue.Queue()
+    xmpp = Billfred(jid, password, room, nick)
+    # xmpp.ssl_version = ssl.PROTOCOL_TLSv1_2
 
     # Start thread for logging
-    db_thr = threading.Thread(target=db_thread, args=(db_path, db_queue))
-    db_thr.start()
+    # db_thr = threading.Thread(target=db_thread, args=(db_path, db_queue))
+    # db_thr.start()
 
-    # Start links parser thread
-    links_thr = threading.Thread(target=links_thread, args=(to_links, msg_q))
-    links_thr.start()
+    # # Start links parser thread
+    # links_thr = threading.Thread(target=links_thread, args=(to_links, msg_q))
+    # links_thr.start()
 
-    # Start RSS feed downloader thread
-    rss_thr = threading.Thread(target=rss_thread, args=(to_rss, msg_q))
-    rss_thr.start()
+    # # Start RSS feed downloader thread
+    # rss_thr = threading.Thread(target=rss_thread, args=(to_rss, msg_q))
+    # rss_thr.start()
 
-    # Start WIKI thread
-    wiki_thr = threading.Thread(target=wiki_thread, args=(to_wiki, msg_q))
-    wiki_thr.start()
+    # # Start WIKI thread
+    # wiki_thr = threading.Thread(target=wiki_thread, args=(to_wiki, msg_q))
+    # wiki_thr.start()
 
     # Connect to the XMPP server and start processing XMPP stanzas.
     try:
-        if xmpp.connect():
-            xmpp.process(block=True)
-        else:
-            logger.error('Unable to connect')
-    except Exception as e:
+        xmpp.connect()
+        xmpp.process(forever=True)
+    except Exception:
         logger.exception('Error on xmpp connect')
     finally:
         # Always close threads
-        [q.put('stop') for q in (db_queue, to_links, to_rss)]
-        db_thr.join()
+        pass
+        # [q.put('stop') for q in (db_queue, to_links, to_rss)]
+        # db_thr.join()
+    # SIGNAL fixme
     logger.info('Done')
 
 
