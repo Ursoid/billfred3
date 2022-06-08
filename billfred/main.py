@@ -6,11 +6,13 @@ import logging
 import logging.config
 import argparse
 import configparser
+import ssl
 
 from billfred.billfred import Billfred
 from billfred.database import db_thread
 from billfred.links import links_thread
 from billfred.rss import rss_thread
+from billfred.wiki import wiki_thread
 
 
 logger = logging.getLogger(__name__)
@@ -59,9 +61,10 @@ def main():
     db_queue = queue.Queue()
     to_links = queue.Queue()
     to_rss = queue.Queue()
+    to_wiki = queue.Queue()
     msg_q = queue.Queue()
     xmpp = Billfred(jid, password, room, nick, rss_tasks, db_queue,
-                    to_links, to_rss, msg_q)
+                    to_links, to_rss, to_wiki, msg_q)
     xmpp.ssl_version = ssl.PROTOCOL_TLSv1_2
 
     # Start thread for logging
@@ -75,6 +78,10 @@ def main():
     # Start RSS feed downloader thread
     rss_thr = threading.Thread(target=rss_thread, args=(to_rss, msg_q))
     rss_thr.start()
+
+    # Start WIKI thread
+    wiki_thr = threading.Thread(target=wiki_thread, args=(to_wiki, msg_q))
+    wiki_thr.start()
 
     # Connect to the XMPP server and start processing XMPP stanzas.
     try:

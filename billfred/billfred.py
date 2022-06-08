@@ -19,7 +19,7 @@ class Billfred(sleekxmpp.ClientXMPP):
     links_limit = 3
 
     def __init__(self, jid, password, room, nick, rss, db_queue,
-                 to_links_queue, to_rss_queue, msg_queue):
+                 to_links_queue, to_rss_queue, to_wiki_queue, msg_queue):
         sleekxmpp.ClientXMPP.__init__(self, jid, password)
 
         # Load modules
@@ -32,6 +32,7 @@ class Billfred(sleekxmpp.ClientXMPP):
         self.db_queue = db_queue
         self.to_links_queue = to_links_queue
         self.to_rss = to_rss_queue
+        self.to_wiki_queue = to_wiki_queue
         self.msg_queue = msg_queue
 
         self.add_event_handler("session_start", self.start)
@@ -124,7 +125,7 @@ class Billfred(sleekxmpp.ClientXMPP):
             if len(tokens) > 1:
                 command = tokens[1]
                
-                ### Ping command
+            # Ping command
             if command == 'ping':
                 self.try_ping(msg['from'], msg['mucnick'])
             elif command == 'version':
@@ -136,6 +137,18 @@ class Billfred(sleekxmpp.ClientXMPP):
                 self.send_bot_message({
                     'to': msg['from'].bare,
                     'message': "Custom command test. Bot version: {}".format(BOT_VERSION)
+                })
+            elif command.startswith('wiki'):
+                # 'wiki' or 'wiki{lang}' with optional ':title'
+                # examples: wiki query, wikiru query, wikiru:title query
+                cmd = command.split(':')
+                lang = cmd[0][len('wiki'):] or None
+                in_title = len(cmd) > 1 and cmd[1] == 'title'
+                self.to_wiki_queue.put({
+                    'to': msg['from'].bare,
+                    'query': ''.join(tokens[2:]),
+                    'lang': lang,
+                    'in_title': in_title
                 })
             else:
                 self.send_bot_message({
