@@ -1,8 +1,8 @@
 import feedparser
 import logging
+from lxml.html import fromstring
 
 logger = logging.getLogger(__name__)
-
 
 last_dates = {}
 
