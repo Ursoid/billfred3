@@ -43,11 +43,6 @@ def main():
     if not any([jid, password, room]):
         logger.error('Wrong account parameters, exiting')
         sys.exit(78)
-    
-    # Database
-    db_path = config['database']['database_path']
-    if not db_path:
-        db_path = '{}_chatlog.db'.format(room)
 
     # RSS tasks
     rss_tasks = []
@@ -64,7 +59,8 @@ def main():
     # to_rss = queue.Queue()
     # to_wiki = queue.Queue()
     # msg_q = queue.Queue()
-    xmpp = Billfred(jid, password, room, nick)
+    xmpp = Billfred(config)
+    # jid, password, room, nick
     # xmpp.ssl_version = ssl.PROTOCOL_TLSv1_2
 
     # Start thread for logging

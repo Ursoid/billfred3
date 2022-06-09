@@ -26,6 +26,7 @@ setup(
         'requests',
         'lxml',
         'feedparser',
+        'aiosqlite'
     ],
 
     include_package_data=True,

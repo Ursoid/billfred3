@@ -1,10 +1,10 @@
 import slixmpp
-import time
 import logging
 import asyncio
 # import queue
 from slixmpp.exceptions import XMPPError, IqError, IqTimeout
 
+from billfred.database import Database
 from billfred.links import extract_links
 from billfred.eliza import analyze
 
@@ -16,22 +16,36 @@ BOT_VERSION = 0.2
 class Billfred(slixmpp.ClientXMPP):
     """Billfred chat bot."""
     # Amount of processed links in one message
-    links_limit = 3
+    links_limit = 3             # Move to links module FIXME
 
-    def __init__(self, jid, password, room, nick):
+    def __init__(self, config):
+        self.config = config
+        jid = config['account']['jid']
+        password = config['account']['password']
         super().__init__(jid, password)
+
+        self.room = config['account']['room']
+        self.nick = config['account']['nick']
 
         # Load modules
         self.register_plugin('xep_0045')  # Multi-User Chat
         self.register_plugin('xep_0199')  # XMPP Ping
 
-        self.room = room
-        self.nick = nick
+        # Initialize subsystems
+        db_path = '{}_chatlog.db'.format(self.room)
+        if 'database' in config and config['database'].get('database_path'):
+            db_path = config['database']['database_path']
+        self.db = Database(db_path)
+
         self.add_event_handler("session_start", self.start)
+        # Maybe move it to top level destructor?
+        self.add_event_handler("session_end", self.stop)
         self.add_event_handler("groupchat_message", self.muc_message)
         self.add_event_handler("send_bot_message", self.send_bot_message)
 
     async def start(self, event):
+        """Initialize async services and connect."""
+        await self.db.init()
         try:
             await self.get_roster()
             self.send_presence()
@@ -43,6 +57,13 @@ class Billfred(slixmpp.ClientXMPP):
             logger.exception('Error on MUC join: %s', e)
             self.disconnect()
             return
+
+    async def stop(self, event):
+        """Stop all async services."""
+        try:
+            await self.db.close()
+        except Exception:
+            logger.exception('Error on stopping')
 
     def check_rss(self, prefix, url):
         """Return function that will put RSS check task."""
@@ -78,12 +99,11 @@ class Billfred(slixmpp.ClientXMPP):
 
     def muc_message(self, msg):
         """Process message and do actions depending on its content."""
-        nick = msg['mucnick']   # User nick sowed in chat room
-        jid = str(msg['from'])  # ful JID Like user@jabb.en/UserName
         message = msg['body']   # Message body
-        time_local = time.time()
-        # self.write_chat_log((time_local, jid, nick, message,))
-        
+
+        # Write message to database
+        asyncio.create_task(self.db.write(msg))
+
         # Disable self-interaction
         if msg['mucnick'] == self.nick:
             return
@@ -102,7 +122,7 @@ class Billfred(slixmpp.ClientXMPP):
             tokens = msg['body'].split()
             if len(tokens) > 1:
                 command = tokens[1]
-               
+
             # Ping command
             if command == 'ping':
                 asyncio.create_task(self.try_ping(msg['from'], msg['mucnick']))
