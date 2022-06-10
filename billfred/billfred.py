@@ -1,12 +1,14 @@
 import slixmpp
 import logging
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 # import queue
 from slixmpp.exceptions import XMPPError, IqError, IqTimeout
 
 from billfred.database import Database
 from billfred.links import extract_links
 from billfred.eliza import analyze
+from billfred.rss import feed_checker
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,7 @@ class Billfred(slixmpp.ClientXMPP):
     async def start(self, event):
         """Initialize async services and connect."""
         await self.db.init()
+        self.init_feeds()
         try:
             await self.get_roster()
             self.send_presence()
@@ -60,33 +63,33 @@ class Billfred(slixmpp.ClientXMPP):
 
     async def stop(self, event):
         """Stop all async services."""
+        logger.info('Stopping service')
         try:
             await self.db.close()
+            for task in self.feed_tasks:
+                task.cancel()
         except Exception:
             logger.exception('Error on stopping')
 
-    def check_rss(self, prefix, url):
-        """Return function that will put RSS check task."""
-        def do_check():
-            self.to_rss.put((prefix, url))
-        return do_check
-
-    def check_messages(self):
-        """Check if new messages from threads are available."""
-        try:
-            msg = self.msg_queue.get_nowait()
-            if msg:
-                self.event("send_bot_message", {
-                    'to': msg.get('to', self.room),
-                    'message': msg['message']
-                })
-        except queue.Empty:
-            pass
+    def init_feeds(self):
+        """Initialize feed checker and start initial run."""
+        self.feed_pool = ThreadPoolExecutor(max_workers=5)
+        self.feed_tasks = []
+        for section in self.config.sections():
+            if section.startswith('rss_'):
+                task = {
+                    'prefix': self.config[section]['prefix'],
+                    'url': self.config[section]['url'],
+                    'time': int(self.config[section]['time'])
+                }
+                self.feed_tasks.append(
+                    asyncio.create_task(feed_checker(self, task))
+                )
 
     def send_bot_message(self, data):
         """Send message from bot."""
         try:
-            self.send_message(mto=data['to'],
+            self.send_message(mto=data.get('to', self.room),
                               mbody=data['message'],
                               mtype='groupchat')
         except IqError as e:
@@ -95,7 +98,8 @@ class Billfred(slixmpp.ClientXMPP):
                         e.iq['error']['condition'])
         except IqTimeout:
             logger.info("No response from %s", data['to'])
-
+        except Exception:
+            logger.exception("Error on message send")
 
     def muc_message(self, msg):
         """Process message and do actions depending on its content."""

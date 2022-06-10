@@ -85,4 +85,4 @@ class Database:
         """Destroy db connection."""
         if self.db:
             logger.info('Closing db')
-            self.db.close()
+            await self.db.close()

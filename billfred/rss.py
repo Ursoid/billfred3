@@ -1,6 +1,6 @@
+import asyncio
 import feedparser
 import logging
-from lxml.html import fromstring
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +9,7 @@ last_dates = {}
 
 def process_feed(prefix, url):
     """Download feed and return new entries."""
-    logger.info('Downloading RSS %s %s', prefix, url)
+    logger.info('Downloading feed %s %s', prefix, url)
     feed = feedparser.parse(url)
     # Check errors
     if feed.bozo:
@@ -20,7 +20,9 @@ def process_feed(prefix, url):
     # First run - do nothing but save last seen entry date
     if last_date is None:
         if len(feed.entries):
-            last_dates[prefix] = max([e.published_parsed for e in feed.entries])
+            last_dates[prefix] = max([
+                e.published_parsed for e in feed.entries
+            ])
         else:
             logger.info('No entries in %s %s', prefix, url)
         return
@@ -32,27 +34,23 @@ def process_feed(prefix, url):
             continue
         if entry.published_parsed > max_date:
             max_date = entry.published_parsed
-        shitty_htm = entry.content[0].value
-        tree = fromstring( shitty_htm )
-        a = tree.xpath('//div')
-        circumcised_content = a[1].text_content()[0:255]
-        entries.append('{}: {} {} {}'.format(prefix, circumcised_content, entry.title, entry.link))
+        entries.append('{}: {} {}'.format(prefix, entry.title, entry.link))
 
     last_dates[prefix] = max_date
-    logger.info('RSS %s processed, %s new entries', prefix, len(entries))
+    logger.info('Feed %s processed, %s new entries', prefix, len(entries))
     return entries
 
 
-def rss_thread(queue_in, queue_out):
-    """Thread for RSS, receives (prefix, url) and returns entries."""
+async def feed_checker(client, task):
+    """Run periodic feed check."""
     while True:
         try:
-            msg = queue_in.get()
-            # Stop thread when 'stop' received
-            if msg == 'stop':
-                break
-            entries = process_feed(*msg)
+            loop = asyncio.get_running_loop()
+            entries = await loop.run_in_executor(
+                client.feed_pool, process_feed, task['prefix'], task['url']
+            )
             if entries:
-                queue_out.put({'message': '\n'.join(entries)})
-        except Exception as e:
+                client.send_bot_message({'message': '\n'.join(entries)})
+        except Exception:
             logger.exception('Feed thread error')
+        await asyncio.sleep(task['time'])
