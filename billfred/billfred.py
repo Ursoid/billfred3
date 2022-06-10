@@ -8,7 +8,7 @@ from slixmpp.exceptions import XMPPError, IqError, IqTimeout
 from billfred.database import Database
 from billfred.links import extract_links
 from billfred.eliza import analyze
-from billfred.rss import feed_checker
+from billfred.feeds import feed_checker
 
 logger = logging.getLogger(__name__)
 
