@@ -2,12 +2,12 @@
 Billfred
 ========
 
-A jabber bot written with python 3. Uses `Slixmpp`_.
+A pretty simple jabber bot written with python 3. Uses `Slixmpp`_. It
+can display link titles, check RSS/Atom feeds, query wikipedia and do
+other simple tasks.
 
 Install
 =======
-
-Libxml is required to compile *lxml* dependency.
 
 Installation with virtualenv and pip::
 
@@ -34,5 +34,7 @@ like this::
 
 If ``--config`` isn't specified, ``billfred.cfg`` in current directory
 will be used.
+
+Send ``help`` message to bot in MUC for usage info.
 
 .. _Slixmpp: https://lab.louiz.org/poezio/slixmpp
