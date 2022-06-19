@@ -26,7 +26,9 @@ setup(
         'requests',
         'lxml',
         'feedparser',
-        'aiosqlite'
+        'aiosqlite',
+        'aiohttp',
+        'charset-normalizer',
     ],
 
     include_package_data=True,

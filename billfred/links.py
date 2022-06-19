@@ -1,99 +1,145 @@
-import requests
+import asyncio
+import aiohttp
+import codecs
 import cgi
 import logging
-import time
 import re
+from charset_normalizer import detect
 from urllib.parse import urlsplit
-from lxml.html import fromstring
+from html.parser import HTMLParser
 
 logger = logging.getLogger(__name__)
 
-EXT_BLACKLIST = (
-    'png', 'jpg', 'jpeg', 'gif', 'png', 'pdf', 'doc', 'xls',
-    'docx', 'djvu', 'ppt', 'pptx', 'avi', 'mp4', 'mp3', 'flac', 'pps',
-    'mp3', 'ogg', 'webm', 'js', 'css'
-)
-ALLOWED_TYPES = ('text/html', 'application/xhtml+xml')
-TOO_LONG = 1024 * 1024 * 5
-LINK_INTERVAL = 3
-LINK_RE = re.compile(r'https?://[^\s]+')
+
+class TitleParser(HTMLParser):
+    """HTML parser that extracts titles from page."""
+
+    def __init__(self, url):
+        super().__init__()
+        self.url = url
+        self.domain = url.netloc
+        self.title = None
+        self.in_title = False
+        self.title_buf = []
+
+    def get_title(self):
+        """Return title if ready."""
+        return self.title
+
+    def handle_starttag(self, tag, attrs):
+        """Handle start of title tag."""
+        if tag == 'title':
+            self.in_title = True
+
+    def handle_endtag(self, tag):
+        """Handle end of title tag."""
+        if tag == 'title':
+            self.in_title = False
+            self.title = ''.join(self.title_buf)
+
+    def handle_data(self, data):
+        """Append data to title buffer."""
+        if self.in_title:
+            self.title_buf.append(data)
 
 
-def is_allowed(url):
-    """Check if url isn't blacklisted."""
-    parsed_url = urlsplit(url.lower())
-    return parsed_url.path.split('.')[-1] not in EXT_BLACKLIST
+class Links:
+    """Service for getting titles from links."""
+    EXT_BLACKLIST = (
+        'png', 'jpg', 'jpeg', 'gif', 'png', 'pdf', 'doc', 'xls',
+        'docx', 'djvu', 'ppt', 'pptx', 'avi', 'mp4', 'mp3', 'flac', 'pps',
+        'mp3', 'ogg', 'webm', 'js', 'css'
+    )
+    ALLOWED_TYPES = ('text/html', 'application/xhtml+xml')
+    TOO_LONG = 1024 * 1024 * 5
+    LINK_INTERVAL = 3
+    LINK_RE = re.compile(r'https?://[^\s]+')
+    CHUNK_SIZE = 1024
 
+    def __init__(self, client):
+        self.client = client
+        self.session = aiohttp.ClientSession()
 
-def extract_title(url, data):
-    """Extract title from site content for specific url."""
-    parsed_url = urlsplit(url.lower())
-    tree = fromstring(data)
-    title = None
-    if ('youtube.com' in parsed_url.netloc or
-        'youtu.be' in parsed_url.netloc):
-        title = tree.xpath('//meta[@name="title"]/@content')
-        if title:
-            return '{} - YouTube'.format(title[0].strip())
-    else:
-        title = tree.xpath('//title/text()')
-        if title:
-            return title[0].strip()
+    async def close(self):
+        """Destroy session."""
+        if self.session:
+            logger.info('Destroying links session')
+            await self.session.close()
 
+    @classmethod
+    def extract_links(cls, message):
+        """Extract links from message."""
+        return list(set(cls.LINK_RE.findall(message)))
 
-def get_title(url):
-    """Download page and get document title."""
-    if not is_allowed(url):
-        logger.debug('Not allowed extension: %s', url)
-        return
-    r = None
-    try:
-        r = requests.get(url, timeout=20, stream=True)
-        if int(r.headers.get('content-length', TOO_LONG)) > TOO_LONG:
-            logger.debug('Content too large: %s', url)
-            return
-        mimetype, _ = cgi.parse_header(r.headers.get('content-type', ''))
-        if mimetype not in ALLOWED_TYPES:
-            logger.debug('Not allowed: %s, %s', url, mimetype)
-            return
-        if (r.text.lstrip().startswith('<?xml') or
-            'charset' not in r.headers.get('content-type')):
-            data = r.content
-        else:
-            data = r.text
-        title = extract_title(r.url, data)
-        if title:
-            logger.info('Found title: %s, %s', url, title)
-            return title
-        logger.debug('Title not found: %s', url)
-    except requests.exceptions.RequestException as e:
-        logger.debug('Error: %s', e)
-    except Exception as e:
-        logger.exception('Unhandled exception: %s', e)
-    finally:
-        if r is not None:
-            r.close()
-
-
-def links_thread(queue_in, queue_out):
-    """Thread for link parser."""
-    while True:
-        links = queue_in.get()
-        # Stop thread when 'stop' received
-        if links == 'stop':
-            break
+    async def process(self, links):
         for link in links:
             logger.info('Processing link: %s', link['link'])
-            title = get_title(link['link'])
+            title = await self.get_title(link['link'])
             if title is not None:
-                queue_out.put({'to': link['to'],
-                               'message': 'TITLE: {}'.format(title)})
+                self.client.send_bot_message({
+                    'to': link['to'],
+                    'message': 'TITLE: {}'.format(title)
+                })
             if len(links) > 1:
-                time.sleep(LINK_INTERVAL)
+                await asyncio.sleep(self.LINK_INTERVAL)
         # Just sleep for some time to reduce load
-        time.sleep(LINK_INTERVAL)
+        await asyncio.sleep(self.LINK_INTERVAL)
 
+    def is_allowed(self, url):
+        """Check if url isn't blacklisted."""
+        parsed_url = urlsplit(url.lower())
+        return parsed_url.path.split('.')[-1] not in self.EXT_BLACKLIST
 
-def extract_links(message):
-    """Extract links from message."""
-    return list(set(LINK_RE.findall(message)))
+    def get_decoder(self, charset):
+        """Get incremental decoder for specified charset."""
+        cls = codecs.getincrementaldecoder(charset)
+        return cls(errors='ignore')
+
+    async def extract_title(self, response):
+        """Extract title from response."""
+        parsed_url = urlsplit(str(response.url).lower())
+        title = None
+        parser = TitleParser(parsed_url)
+        charset = response.charset
+        decoder = None
+        if charset is not None:
+            decoder = self.get_decoder(charset)
+        async for chunk in response.content.iter_chunked(self.CHUNK_SIZE):
+            if not decoder:
+                detected = detect(chunk)
+                if detected['encoding'] is not None:
+                    decoder = self.get_decoder(detected['encoding'])
+            if not decoder:
+                # that page is hopeless
+                logger.info('Can not detect charset')
+                break
+            parser.feed(decoder.decode(chunk))
+            title = parser.get_title()
+            if title is not None:
+                break
+        if title is not None:
+            return title.strip()
+
+    async def get_title(self, url):
+        if not self.is_allowed(url):
+            logger.debug('Not allowed extension: %s', url)
+            return
+        try:
+            async with self.session.get(url) as r:
+                # Check mimetype and size
+                if int(
+                        r.headers.get('content-length', self.TOO_LONG)
+                ) > self.TOO_LONG:
+                    logger.debug('Content too large: %s', url)
+                    return
+                mimetype, _ = cgi.parse_header(r.headers.get('content-type', ''))
+                if mimetype not in self.ALLOWED_TYPES:
+                    logger.debug('Not allowed: %s, %s', url, mimetype)
+                    return
+                title = await self.extract_title(r)
+                if title:
+                    logger.info('Found title: %s, %s', url, title)
+                    return title
+        except aiohttp.ClientError as e:
+            logger.debug('Net error: %s', e)
+        logger.debug('Title not found: %s', url)

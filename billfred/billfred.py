@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from slixmpp.exceptions import XMPPError, IqError, IqTimeout
 
 from billfred.database import Database
-from billfred.links import extract_links
+from billfred.links import Links
 from billfred.eliza import analyze
 from billfred.feeds import feed_checker
 
@@ -38,6 +38,7 @@ class Billfred(slixmpp.ClientXMPP):
         if 'database' in config and config['database'].get('database_path'):
             db_path = config['database']['database_path']
         self.db = Database(db_path)
+        self.links = Links(self)
 
         self.add_event_handler("session_start", self.start)
         # Maybe move it to top level destructor?
@@ -71,6 +72,17 @@ class Billfred(slixmpp.ClientXMPP):
         except Exception:
             logger.exception('Error on stopping')
 
+    async def log_exception(self, func):
+        """Log exception from async tasks."""
+        try:
+            return await func
+        except Exception:
+            logger.exception("Unhandled exception")
+
+    def create_task(self, func):
+        """Wrapper for running async task with exception logging."""
+        return asyncio.create_task(self.log_exception(func))
+
     def init_feeds(self):
         """Initialize feed checker and start initial run."""
         self.feed_pool = ThreadPoolExecutor(max_workers=5)
@@ -83,7 +95,7 @@ class Billfred(slixmpp.ClientXMPP):
                     'time': int(self.config[section]['time'])
                 }
                 self.feed_tasks.append(
-                    asyncio.create_task(feed_checker(self, task))
+                    self.create_task(feed_checker(self, task))
                 )
 
     def send_bot_message(self, data):
@@ -106,7 +118,7 @@ class Billfred(slixmpp.ClientXMPP):
         message = msg['body']   # Message body
 
         # Write message to database
-        asyncio.create_task(self.db.write(msg))
+        self.create_task(self.db.write(msg))
 
         # Disable self-interaction
         if msg['mucnick'] == self.nick:
@@ -114,11 +126,15 @@ class Billfred(slixmpp.ClientXMPP):
 
         # Link title parser
         if 'http' in message:
-            links = extract_links(message)
-            self.to_links_queue.put([
-                {'to': msg['from'].bare, 'link': l}
-                for l in links[:self.links_limit]
-            ])
+            links = Links.extract_links(message)
+            self.create_task(
+                self.links.process(
+                    [{
+                        'to': msg['from'].bare,
+                        'link': link
+                    } for link in links[:self.links_limit]]
+                )
+            )
 
         # Bot command parser
         if msg['body'].startswith(self.nick):
@@ -129,7 +145,7 @@ class Billfred(slixmpp.ClientXMPP):
 
             # Ping command
             if command == 'ping':
-                asyncio.create_task(self.try_ping(msg['from'], msg['mucnick']))
+                self.create_task(self.try_ping(msg['from'], msg['mucnick']))
             elif command == 'version':
                 self.send_bot_message({
                     'to': msg['from'].bare,
