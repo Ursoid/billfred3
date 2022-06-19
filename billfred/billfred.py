@@ -13,11 +13,18 @@ logger = logging.getLogger(__name__)
 
 BOT_VERSION = 0.2
 
+HELP_TEXT = r'''Billfred bot, version: {}
+Writes chat log and displays URL title if available.
+Bot commands:
+  ping -- ping user
+  help -- display this text
+  (any other text) -- ask Eliza
+'''.format(BOT_VERSION)
+
 
 class Billfred(slixmpp.ClientXMPP):
     """Billfred chat bot."""
     # Amount of processed links in one message
-    links_limit = 3             # Move to links module FIXME
 
     def __init__(self, config):
         self.config = config
@@ -132,7 +139,7 @@ class Billfred(slixmpp.ClientXMPP):
                     [{
                         'to': msg['from'].bare,
                         'link': link
-                    } for link in links[:self.links_limit]]
+                    } for link in links[:Links.LINKS_LIMIT]]
                 )
             )
 
@@ -151,10 +158,10 @@ class Billfred(slixmpp.ClientXMPP):
                     'to': msg['from'].bare,
                     'message': "Bot version: {}".format(BOT_VERSION)
                 })
-            elif command == 'test':
+            elif command == 'help':
                 self.send_bot_message({
                     'to': msg['from'].bare,
-                    'message': "Custom command test. Bot version: {}".format(BOT_VERSION)
+                    'message': HELP_TEXT
                 })
             elif command.startswith('wiki'):
                 # 'wiki' or 'wiki{lang}' with optional ':title'

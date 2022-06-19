@@ -55,6 +55,7 @@ class Links:
     LINK_INTERVAL = 3
     LINK_RE = re.compile(r'https?://[^\s]+')
     CHUNK_SIZE = 1024
+    LINKS_LIMIT = 3
 
     def __init__(self, client):
         self.client = client
