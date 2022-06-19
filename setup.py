@@ -23,8 +23,6 @@ setup(
     packages=find_packages(exclude=['docs', 'tests']),
     install_requires=[
         'slixmpp',
-        'requests',
-        'lxml',
         'feedparser',
         'aiosqlite',
         'aiohttp',
@@ -34,7 +32,7 @@ setup(
     include_package_data=True,
     entry_points={
         'console_scripts': [
-            'billfred=billfred.main:main',
+            'billfred=billfred:main',
         ],
     },
 )

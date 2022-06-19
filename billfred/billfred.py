@@ -80,7 +80,7 @@ class Billfred(slixmpp.ClientXMPP):
             self.disconnect()
             return
 
-    async def stop(self, event):
+    async def stop(self, *args, **kwargs):
         """Stop all async services."""
         logger.info('Stopping service')
         try:
@@ -89,6 +89,7 @@ class Billfred(slixmpp.ClientXMPP):
             await self.db.close()
             for task in self.feed_tasks:
                 task.cancel()
+            self.disconnect()
         except Exception:
             logger.exception('Error on stopping')
 
