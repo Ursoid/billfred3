@@ -6,6 +6,7 @@ from slixmpp.exceptions import XMPPError, IqError, IqTimeout
 
 from billfred.database import Database
 from billfred.links import Links
+from billfred.wiki import Wiki
 from billfred.eliza import ask_eliza
 from billfred.feeds import feed_checker
 
@@ -18,6 +19,15 @@ Writes chat log and displays URL title if available.
 Bot commands:
   ping -- ping user
   help -- display this text
+  wiki -- find wikipedia articles. Usage:
+          wiki(lang)(:title)
+            lang -- wiki language
+            :title - search only in title
+          Examples:
+            wiki QUERY -- search ru wiki
+            wikien QUERY -- search en wiki
+            wiki:title QUERY -- search ru wiki in title
+            wikies:title QUERY -- search es wiki in title
   (any other text) -- ask Eliza
 '''.format(BOT_VERSION)
 
@@ -45,6 +55,7 @@ class Billfred(slixmpp.ClientXMPP):
             db_path = config['database']['database_path']
         self.db = Database(db_path)
         self.links = Links(self)
+        self.wiki = Wiki(self)
         self.eliza_pool = ThreadPoolExecutor(max_workers=5)
 
         self.add_event_handler("session_start", self.start)
@@ -73,6 +84,8 @@ class Billfred(slixmpp.ClientXMPP):
         """Stop all async services."""
         logger.info('Stopping service')
         try:
+            await self.links.close()
+            await self.wiki.close()
             await self.db.close()
             for task in self.feed_tasks:
                 task.cancel()
@@ -164,17 +177,9 @@ class Billfred(slixmpp.ClientXMPP):
                     'message': HELP_TEXT
                 })
             elif command.startswith('wiki'):
-                # 'wiki' or 'wiki{lang}' with optional ':title'
-                # examples: wiki query, wikiru query, wikiru:title query
-                cmd = command.split(':')
-                lang = cmd[0][len('wiki'):] or None
-                in_title = len(cmd) > 1 and cmd[1] == 'title'
-                self.to_wiki_queue.put({
-                    'to': msg['from'].bare,
-                    'query': ''.join(tokens[2:]),
-                    'lang': lang,
-                    'in_title': in_title
-                })
+                query, lang, in_title = self.wiki.parse_command(msg['body'])
+                if query is not None:
+                    self.create_task(self.wiki.search(query, lang, in_title))
             else:
                 self.create_task(ask_eliza(
                     self,
