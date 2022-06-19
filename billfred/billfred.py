@@ -112,7 +112,10 @@ class Billfred(slixmpp.ClientXMPP):
                 task = {
                     'prefix': self.config[section]['prefix'],
                     'url': self.config[section]['url'],
-                    'time': int(self.config[section]['time'])
+                    'time': int(self.config[section]['time']),
+                    'show_body': self.config[section].getboolean(
+                        'show_body', True
+                    )
                 }
                 self.feed_tasks.append(
                     self.create_task(feed_checker(self, task))
