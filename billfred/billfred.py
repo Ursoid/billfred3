@@ -2,12 +2,11 @@ import slixmpp
 import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-# import queue
 from slixmpp.exceptions import XMPPError, IqError, IqTimeout
 
 from billfred.database import Database
 from billfred.links import Links
-from billfred.eliza import analyze
+from billfred.eliza import ask_eliza
 from billfred.feeds import feed_checker
 
 logger = logging.getLogger(__name__)
@@ -39,6 +38,7 @@ class Billfred(slixmpp.ClientXMPP):
             db_path = config['database']['database_path']
         self.db = Database(db_path)
         self.links = Links(self)
+        self.eliza_pool = ThreadPoolExecutor(max_workers=5)
 
         self.add_event_handler("session_start", self.start)
         # Maybe move it to top level destructor?
@@ -169,10 +169,11 @@ class Billfred(slixmpp.ClientXMPP):
                     'in_title': in_title
                 })
             else:
-                self.send_bot_message({
-                    'to': msg['from'].bare,
-                    'message': analyze(msg['body'])
-                })
+                self.create_task(ask_eliza(
+                    self,
+                    msg['from'].bare,
+                    ' '.join(tokens[1:])
+                ))
 
     async def try_ping(self, pingjid, nick):
         """Ping user."""
@@ -189,7 +190,3 @@ class Billfred(slixmpp.ClientXMPP):
                         e.iq['error']['condition'])
         except IqTimeout:
             logger.info("No response from %s", pingjid)
-
-    def write_chat_log(self, query):
-        """Send chat message to database writer thread."""
-        self.db_queue.put(query)

@@ -1,18 +1,19 @@
-# encoding=utf8
 """
-This file contains code from Evan Dempsey's implementation of ELIZA. 
+This file contains code from Evan Dempsey's implementation of ELIZA.
 https://www.smallsurething.com/implementing-the-famous-eliza-chatbot-in-python/
 
-Since he didn't explicitly specify the license for his code 
+Since he didn't explicitly specify the license for his code
 and released for public, we consider it freely available.
 
-I (lockywolf, lockywolf@gmail.com) copied the code to this file. 
+I (lockywolf, lockywolf@gmail.com) copied the code to this file.
 
 """
-
+import logging
+import asyncio
 import re
 import random
 
+logger = logging.getLogger(__name__)
 
 reflections = {
     "am": "are",
@@ -247,24 +248,23 @@ def reflect(fragment):
 
 
 def analyze(statement):
+    """Analyze message and get possible answer."""
     for pattern, responses in psychobabble:
-        match = re.match(pattern, statement.rstrip(".!"))
-        if match:
+        match_ = re.match(pattern, statement.rstrip(".!"))
+        if match_:
             response = random.choice(responses)
-            return response.format(*[reflect(g) for g in match.groups()])
+            return response.format(*[reflect(g) for g in match_.groups()])
 
 
-def main():
-    print( "Hello. How are you feeling today?" )
-
-    while True:
-        statement = raw_input("> ")
-        print( analyze(statement))
-
-        if statement == "quit":
-            break
-
-
-if __name__ == "__main__":
-    main()
-
+async def ask_eliza(client, to, message):
+    """Ask Eliza something."""
+    logger.debug('Asking Eliza for "%s"', message)
+    loop = asyncio.get_running_loop()
+    answer = await loop.run_in_executor(
+        client.eliza_pool, analyze, message
+    )
+    if answer:
+        client.send_bot_message({
+            'to': to,
+            'message': answer
+        })
