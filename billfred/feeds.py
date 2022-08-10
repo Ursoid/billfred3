@@ -49,7 +49,7 @@ def process_feed(prefix, url, show_body=False):
     if last_date is None:
         if len(feed.entries):
             last_dates[prefix] = max([
-                e.published_parsed for e in feed.entries
+                e.updated_parsed for e in feed.entries
             ])
         else:
             logger.info('No entries in %s %s', prefix, url)
@@ -58,10 +58,11 @@ def process_feed(prefix, url, show_body=False):
     max_date = last_date
     entries = []
     for entry in feed.entries:
-        if entry.published_parsed <= last_date:
+        if entry.updated_parsed <= last_date:
+            logger.debug('Entry has no date %s', entry)
             continue
-        if entry.published_parsed > max_date:
-            max_date = entry.published_parsed
+        if entry.updated_parsed > max_date:
+            max_date = entry.updated_parsed
         result = '{}: {} {}'.format(prefix, entry.title, entry.link)
         if show_body:
             content = []
