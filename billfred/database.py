@@ -50,14 +50,24 @@ class Database:
                 logger.info('Database is up to date')
                 return
 
-        # Only pre-0.2 supported now
-        logger.info('Migrating database to %s', self.VERSION)
-        await self.db.execute(
-            r'ALTER TABLE chat_log RENAME COLUMN jit TO jid'
-        )
-        await self.db.execute(
-            r'ALTER TABLE chat_log RENAME COLUMN name TO nick'
-        )
+        # Check if database is new
+        async with self.db.execute(
+                r"SELECT COUNT(*) AS CNTREC FROM pragma_table_info('chat_log') WHERE name=?",
+                ('jit',)
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row and not row[0]:
+                # New database without old fields
+                logger.info('Database is in new state')
+            else:
+                # Only pre-0.2 supported now
+                logger.info('Migrating database to %s', self.VERSION)
+                await self.db.execute(
+                    r'ALTER TABLE chat_log RENAME COLUMN jit TO jid'
+                )
+                await self.db.execute(
+                    r'ALTER TABLE chat_log RENAME COLUMN name TO nick'
+                )
 
         # Migrated successfully
         await self.db.execute(
