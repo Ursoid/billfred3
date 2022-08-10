@@ -5,6 +5,11 @@ room=
 room_password=
 nick=
 
+[links]
+disabled = false
+limit = 3
+interval = 3
+
 [database]
 # Full path to sqlite database for chat logs
 database_path=
@@ -28,7 +33,7 @@ database_path=
 # Logging config
 
 [loggers]
-keys = root,billfred,sleekxmpp
+keys = root,billfred,slixmpp
 
 [handlers]
 keys = console
@@ -43,10 +48,10 @@ level = INFO
 handlers = console
 # handlers = file, mail
 
-# Settings for sleekxmpp
-[logger_sleekxmpp]
+# Settings for slixmpp
+[logger_slixmpp]
 level = INFO
-qualname = sleekxmpp
+qualname = slixmpp
 handlers = console
 # handlers = file, mail
 propagate = 0

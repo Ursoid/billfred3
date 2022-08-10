@@ -72,8 +72,10 @@ class Billfred(slixmpp.ClientXMPP):
             await self.get_roster()
             self.send_presence()
             # FIXME password
-            await self.plugin['xep_0045'].join_muc(self.room,
-                                                   self.nick)
+            logger.info('Joining MUC')
+            await self.plugin['xep_0045'].join_muc_wait(self.room,
+                                                        self.nick,
+                                                        timeout=10)
             logger.info('Connected to %s as %s', self.room, self.nick)
         except XMPPError as e:
             logger.exception('Error on MUC join: %s', e)
@@ -106,6 +108,7 @@ class Billfred(slixmpp.ClientXMPP):
 
     def init_feeds(self):
         """Initialize feed checker and start initial run."""
+        logger.info('Initializing feeds')
         self.feed_pool = ThreadPoolExecutor(max_workers=5)
         self.feed_tasks = []
         for section in self.config.sections():
@@ -118,9 +121,11 @@ class Billfred(slixmpp.ClientXMPP):
                         'show_body', True
                     )
                 }
+                logger.info('Adding feed %s', task['url'])
                 self.feed_tasks.append(
                     self.create_task(feed_checker(self, task))
                 )
+        logger.info('Finished feeds initialization')
 
     def send_bot_message(self, data):
         """Send message from bot."""
@@ -149,14 +154,14 @@ class Billfred(slixmpp.ClientXMPP):
             return
 
         # Link title parser
-        if 'http' in message:
+        if not self.links.disabled and 'http' in message:
             links = Links.extract_links(message)
             self.create_task(
                 self.links.process(
                     [{
                         'to': msg['from'].bare,
                         'link': link
-                    } for link in links[:Links.LINKS_LIMIT]]
+                    } for link in links[:self.links.links_limit]]
                 )
             )
 

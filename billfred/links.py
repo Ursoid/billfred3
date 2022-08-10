@@ -60,6 +60,18 @@ class Links:
     def __init__(self, client):
         self.client = client
         self.session = aiohttp.ClientSession()
+        self.link_interval = self.LINK_INTERVAL
+        self.links_limit = self.LINKS_LIMIT
+        self.disabled = False
+        conf = client.config
+        if 'links' in conf:
+            c = conf['links']
+            if c.get('interval') is not None:
+                self.link_interval = int(c['interval'])
+            if c.get('limit') is not None:
+                self.links_limit = int(c['limit'])
+            if c.get('disabled'):
+                self.disabled = c.getboolean('disabled')
 
     async def close(self):
         """Destroy session."""
@@ -73,6 +85,8 @@ class Links:
         return list(set(cls.LINK_RE.findall(message)))
 
     async def process(self, links):
+        if self.disabled:
+            return
         for link in links:
             logger.info('Processing link: %s', link['link'])
             title = await self.get_title(link['link'])
@@ -82,9 +96,9 @@ class Links:
                     'message': 'TITLE: {}'.format(title)
                 })
             if len(links) > 1:
-                await asyncio.sleep(self.LINK_INTERVAL)
+                await asyncio.sleep(self.link_interval)
         # Just sleep for some time to reduce load
-        await asyncio.sleep(self.LINK_INTERVAL)
+        await asyncio.sleep(self.link_interval)
 
     def is_allowed(self, url):
         """Check if url isn't blacklisted."""
