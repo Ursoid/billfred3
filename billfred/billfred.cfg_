@@ -9,6 +9,9 @@ nick=
 disabled = false
 limit = 3
 interval = 3
+ignore_nicks = nick1
+ nick2
+ nick3
 
 [database]
 # Full path to sqlite database for chat logs

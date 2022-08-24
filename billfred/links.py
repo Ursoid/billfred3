@@ -63,6 +63,7 @@ class Links:
         self.link_interval = self.LINK_INTERVAL
         self.links_limit = self.LINKS_LIMIT
         self.disabled = False
+        self.ignore_nicks = set()
         conf = client.config
         if 'links' in conf:
             c = conf['links']
@@ -72,12 +73,19 @@ class Links:
                 self.links_limit = int(c['limit'])
             if c.get('disabled'):
                 self.disabled = c.getboolean('disabled')
+            if c.get('ignore_nicks'):
+                self.ignore_nicks = {i.strip() for i in
+                                     c['ignore_nicks'].split()}
 
     async def close(self):
         """Destroy session."""
         if self.session:
             logger.info('Destroying links session')
             await self.session.close()
+
+    def is_ignored(self, nick):
+        """Check if nickname is ignored."""
+        return nick in self.ignore_nicks
 
     @classmethod
     def extract_links(cls, message):

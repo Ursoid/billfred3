@@ -154,7 +154,11 @@ class Billfred(slixmpp.ClientXMPP):
             return
 
         # Link title parser
-        if not self.links.disabled and 'http' in message:
+        if (
+                not self.links.disabled and
+                'http' in message and
+                not self.links.is_ignored(msg['mucnick'])
+        ):
             links = Links.extract_links(message)
             self.create_task(
                 self.links.process(
