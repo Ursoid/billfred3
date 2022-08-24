@@ -34,7 +34,7 @@ Bot commands:
 
 class Billfred(slixmpp.ClientXMPP):
     """Billfred chat bot."""
-    # Amount of processed links in one message
+    reconnect_timeout = 10
 
     def __init__(self, config):
         self.config = config
@@ -94,6 +94,10 @@ class Billfred(slixmpp.ClientXMPP):
             self.disconnect()
         except Exception:
             logger.exception('Error on stopping')
+        if not self.config['account'].getboolean('no_reconnect'):
+            logger.info('Reconnecting after %s seconds', self.reconnect_timeout)
+            await asyncio.sleep(self.reconnect_timeout)
+            self.connect()
 
     async def log_exception(self, func):
         """Log exception from async tasks."""

@@ -4,6 +4,7 @@ password=
 room=
 room_password=
 nick=
+no_reconnect = false
 
 [links]
 disabled = false
